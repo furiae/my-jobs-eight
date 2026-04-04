@@ -1,0 +1,27 @@
+name: Auto-Apply Jobs
+
+on:
+  schedule:
+    # Every 2 hours
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max applications to attempt'
+        default: '10'
+      dry_run:
+        description: 'Dry run (filter only, no browser)'
+        type: boolean
+        default: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger auto-apply
+        run: |
+          LIMIT="${{ github.event.inputs.limit || '10' }}"
+          DRY="${{ github.event.inputs.dry_run == 'true' && '1' || '0' }}"
+          curl -s -X POST \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/apply?limit=${LIMIT}&dry_run=${DRY}"
