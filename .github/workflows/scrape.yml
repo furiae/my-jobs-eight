@@ -1,0 +1,17 @@
+name: Scrape Jobs
+
+on:
+  schedule:
+    # Every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scrape
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.SCRAPE_SECRET }}" \
+            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/scrape"
