@@ -96,3 +96,34 @@ export async function notifyRecommendation(
 
   return postSlackMessage(`CTO Recommendation: ${title}`, blocks);
 }
+
+/**
+ * Notify the board that a task has been completed.
+ */
+export async function notifyTaskComplete(
+  identifier: string,
+  title: string,
+  summary: string,
+  issueUrl?: string,
+): Promise<boolean> {
+  const blocks = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `✅ Done: ${identifier}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*${title}*\n\n${summary}` },
+    },
+    ...(issueUrl
+      ? [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: `<${issueUrl}|View in Paperclip>` },
+          },
+        ]
+      : []),
+  ];
+
+  return postSlackMessage(`Done: ${identifier} — ${title}`, blocks);
+}

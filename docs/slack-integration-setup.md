@@ -16,19 +16,20 @@ The integration uses a **Slack Bot** (via Bot OAuth Token) to post messages to a
 
 ```
 Paperclip Agent (CTO)
-  └─> lib/slack.ts (postSlackMessage)
+  ├─> lib/slack.ts — notifyBlockedTask()      → 🚫 Blocked alerts
+  ├─> lib/slack.ts — notifyTaskComplete()      → ✅ Task completed alerts
+  └─> lib/slack.ts — notifyRecommendation()    → 💡 Recommendation alerts
         └─> Slack Web API (chat.postMessage)
               └─> Your Slack channel
 
 GitHub Actions (Auto-Apply)
-  └─> lib/notify.ts (notifySlack)
+  └─> lib/notify.ts — notifySlack()            → 📋 Auto-apply run summaries
         └─> Slack Web API (chat.postMessage)
               └─> Your Slack channel
 
-API Endpoint (/api/notify-blocked)
-  └─> lib/slack.ts (notifyBlockedTask)
-        └─> Slack Web API (chat.postMessage)
-              └─> Your Slack channel
+API Endpoints
+  ├─> /api/notify-blocked   → lib/slack.ts (notifyBlockedTask)
+  └─> /api/notify-complete  → lib/slack.ts (notifyTaskComplete)
 ```
 
 ---
@@ -131,9 +132,9 @@ echo 'SLACK_BOT_TOKEN=xoxb-your-token-here' >> .env.local
 echo 'SLACK_CHANNEL_ID=C0AQVDCMTM3' >> .env.local
 ```
 
-## Step 6: Also Set CRON_SECRET (for /api/notify-blocked endpoint)
+## Step 6: Also Set CRON_SECRET (for notification API endpoints)
 
-The `/api/notify-blocked` endpoint requires authentication via `CRON_SECRET`. This is used when the CTO agent or CLI scripts call the endpoint to report blocked tasks.
+The `/api/notify-blocked` and `/api/notify-complete` endpoints require authentication via `CRON_SECRET`. This is used when the CTO agent or CLI scripts call these endpoints.
 
 ```bash
 # Generate a random secret
@@ -177,6 +178,19 @@ curl -X POST https://your-app.vercel.app/api/notify-blocked \
   }'
 ```
 
+### Test via the notify-complete endpoint
+
+```bash
+curl -X POST https://your-app.vercel.app/api/notify-complete \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "TEST-002",
+    "title": "Test completed task",
+    "summary": "This task was completed successfully."
+  }'
+```
+
 ### Test via CLI script (local)
 
 ```bash
@@ -206,7 +220,26 @@ Description of what's blocking progress and who needs to act.
 View in Paperclip (link)
 ```
 
-### 2. Auto-Apply Run Notifications
+### 2. Task Completed Notifications
+
+**When:** The CTO agent finishes any Paperclip task.
+
+**How it works:**
+- The agent calls `POST /api/notify-complete` (or `notifyTaskComplete()` directly) when marking an issue as `done`
+- A rich Slack message is posted with the task identifier, title, summary of work done, and a link to the Paperclip issue
+
+**Slack message format:**
+```
+✅ Done: FUR-141
+Jobs Board - Fix errors
+
+Fixed all 4 GitHub Actions and Vercel deployment failures.
+Added missing secrets and improved scrape workflow validation.
+
+View in Paperclip (link)
+```
+
+### 3. Auto-Apply Run Notifications
 
 **When:** The hourly auto-apply workflow completes (via GitHub Actions).
 
@@ -226,7 +259,7 @@ Attempted: 12  |  Applied ✅: 3  |  Manual needed 👋: 7  |  Failed ❌: 2
 ...
 ```
 
-### 3. CTO Recommendations
+### 4. CTO Recommendations
 
 **When:** The CTO agent has tool/MCP/process recommendations.
 
@@ -250,7 +283,7 @@ View in Paperclip (link)
 |----------|-------------|----------|---------|
 | `SLACK_BOT_TOKEN` | Vercel, GitHub Actions, .env.local | Yes | Slack Bot OAuth token (`xoxb-...`) |
 | `SLACK_CHANNEL_ID` | Vercel, GitHub Actions, .env.local | Yes | Target Slack channel ID (`C...`) |
-| `CRON_SECRET` | Vercel, GitHub Actions, .env.local | Yes | Auth for /api/notify-blocked endpoint |
+| `CRON_SECRET` | Vercel, GitHub Actions, .env.local | Yes | Auth for /api/notify-blocked and /api/notify-complete endpoints |
 | `SLACK_WEBHOOK_URL` | GitHub Actions | No | Legacy fallback (not needed if bot token is set) |
 
 ---
@@ -259,9 +292,10 @@ View in Paperclip (link)
 
 | File | Purpose |
 |------|---------|
-| `lib/slack.ts` | Core Slack messaging: `postSlackMessage()`, `notifyBlockedTask()`, `notifyRecommendation()` |
+| `lib/slack.ts` | Core Slack messaging: `postSlackMessage()`, `notifyBlockedTask()`, `notifyTaskComplete()`, `notifyRecommendation()` |
 | `lib/notify.ts` | Auto-apply notifications: `notifySlack()`, `notifyEmail()`, `notifyDiscord()`, `notifyPaperclip()` |
 | `app/api/notify-blocked/route.ts` | API endpoint for blocked task alerts (auth via CRON_SECRET) |
+| `app/api/notify-complete/route.ts` | API endpoint for task completion alerts (auth via CRON_SECRET) |
 | `scripts/notify-blocked.ts` | CLI script to send blocked-task notifications locally |
 
 ---
@@ -283,8 +317,9 @@ View in Paperclip (link)
 
 The CTO agent should use `lib/slack.ts` functions to send notifications. The agent instructions (`AGENTS.md`) specify:
 
-- **When making recommendations:** Create a Paperclip issue AND send a Slack notification via `lib/slack.ts`
-- **When blocked:** Update the issue status to `blocked` AND call `/api/notify-blocked`
+- **When completing a task:** Call `notifyTaskComplete()` (or `POST /api/notify-complete`) with the task identifier, title, and summary
+- **When blocked:** Update the issue status to `blocked` AND call `notifyBlockedTask()` (or `POST /api/notify-blocked`)
+- **When making recommendations:** Create a Paperclip issue AND call `notifyRecommendation()`
 - **Idle behavior:** Research MCP/tool recommendations and post findings as a Paperclip issue + Slack notification
 
 The agent does NOT need to handle Slack setup — that's a one-time human task described above.
