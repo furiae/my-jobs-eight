@@ -15,6 +15,11 @@ import { scrapeAuthenticJobs } from "@/lib/scrapers/authenticjobs";
 import { scrapeWorkingNomads } from "@/lib/scrapers/workingnomads";
 import { scrapeRSSFeeds } from "@/lib/scrapers/rss";
 import { scrapeReddit } from "@/lib/scrapers/reddit";
+import { scrapeDribbble } from "@/lib/scrapers/dribbble";
+import { scrapeCoroflot } from "@/lib/scrapers/coroflot";
+import { scrapeAIGA } from "@/lib/scrapers/aiga";
+import { scrapeKrop } from "@/lib/scrapers/krop";
+import { scrapeBehance } from "@/lib/scrapers/behance";
 import { upsertJobs } from "@/lib/db";
 import { closeBrowser } from "@/lib/scrapers/browser";
 
@@ -22,7 +27,7 @@ export const maxDuration = 120;
 
 export async function GET() {
   try {
-    const [remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit] = await Promise.allSettled([
+    const [remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance] = await Promise.allSettled([
       scrapeRemoteOK(),
       scrapeWeWorkRemotely(),
       scrapeRemotive(),
@@ -39,9 +44,14 @@ export async function GET() {
       scrapeWorkingNomads(),
       scrapeRSSFeeds(),
       scrapeReddit(),
+      scrapeDribbble(),
+      scrapeCoroflot(),
+      scrapeAIGA(),
+      scrapeKrop(),
+      scrapeBehance(),
     ]);
 
-    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit };
+    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance };
 
     const allJobs = Object.values(results).flatMap(
       (r) => (r.status === "fulfilled" ? r.value : [])
