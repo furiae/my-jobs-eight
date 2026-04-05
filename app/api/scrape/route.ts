@@ -9,6 +9,7 @@ import { scrapeIndeed } from "@/lib/scrapers/indeed";
 import { scrapeDice } from "@/lib/scrapers/dice";
 import { scrapeMonster } from "@/lib/scrapers/monster";
 import { scrapeFlexJobs } from "@/lib/scrapers/flexjobs";
+import { scrapeJobicy } from "@/lib/scrapers/jobicy";
 import { upsertJobs } from "@/lib/db";
 import { closeBrowser } from "@/lib/scrapers/browser";
 
@@ -16,7 +17,7 @@ export const maxDuration = 120;
 
 export async function GET() {
   try {
-    const [remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs] = await Promise.allSettled([
+    const [remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy] = await Promise.allSettled([
       scrapeRemoteOK(),
       scrapeWeWorkRemotely(),
       scrapeRemotive(),
@@ -27,9 +28,10 @@ export async function GET() {
       scrapeDice(),
       scrapeMonster(),
       scrapeFlexJobs(),
+      scrapeJobicy(),
     ]);
 
-    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs };
+    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy };
 
     const allJobs = Object.values(results).flatMap(
       (r) => (r.status === "fulfilled" ? r.value : [])
