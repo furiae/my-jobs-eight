@@ -5,7 +5,9 @@
  * application that requires manual attention (failed or manual_required).
  *
  * Required environment variables:
- *   SLACK_WEBHOOK_URL        — Incoming Webhook URL from your Slack app
+ *   SLACK_BOT_TOKEN          — Slack Bot OAuth token (preferred over webhook)
+ *   SLACK_CHANNEL_ID         — Slack channel ID to post to (used with bot token)
+ *   SLACK_WEBHOOK_URL        — Incoming Webhook URL fallback
  *   PAPERCLIP_API_URL        — Paperclip control-plane base URL
  *   PAPERCLIP_API_KEY        — Paperclip agent API key (short-lived JWT or long-lived key)
  *   PAPERCLIP_COMPANY_ID     — Paperclip company ID
@@ -75,7 +77,28 @@ function buildSlackBlocks(summary: RunSummary): object {
 }
 
 export async function notifySlack(summary: RunSummary): Promise<void> {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  const channelId = process.env.SLACK_CHANNEL_ID;
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+
+  if (botToken && channelId) {
+    // Prefer Bot API — supports richer interactions and the scopes we have
+    const payload = buildSlackBlocks(summary);
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channelId, ...payload }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error(`[notify] Slack API failed: ${data.error}`);
+    }
+    return;
+  }
+
   if (!webhookUrl) return; // silently skip — not configured
 
   const payload = buildSlackBlocks(summary);
