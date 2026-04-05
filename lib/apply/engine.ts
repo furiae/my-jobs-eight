@@ -116,6 +116,9 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
         PROFILE
       );
       record.coverLetterText = coverLetter.text;
+      if (coverLetter.isFallback) {
+        console.log(`[apply] ${job.company} — using fallback cover letter (AI unavailable)`);
+      }
 
       const context = await browser.newContext({
         userAgent:

@@ -41,6 +41,8 @@ export interface CoverLetterResult {
   text: string;
   /** Path to a temp .txt file suitable for upload fields */
   tempFilePath: string;
+  /** True when AI generation failed and static fallback was used */
+  isFallback: boolean;
 }
 
 let _client: Anthropic | null = null;
@@ -55,24 +57,59 @@ function getClient(): Anthropic {
 }
 
 /**
+ * Build a static fallback cover letter using profile data and job context.
+ * Used when AI generation is unavailable.
+ */
+function buildFallbackLetter(job: JobContext, profile: Profile): string {
+  return `Dear Hiring Manager,
+
+I am writing to express my interest in the ${job.title} position at ${job.company}. With more than two decades of experience leading UX, product design, and digital innovation initiatives, I bring a track record of building high-performing teams, scaling design systems, and delivering measurable business growth through human-centered strategy.
+
+Currently serving as Senior Product Designer at Furiae Interactive, I pioneered a collaborative UX process that increased user engagement by 400% while reducing development time by 30%. I also established a structured user interview framework across platforms and led early AI product prototyping initiatives that accelerated testing cycles and positioned our applications at the forefront of innovation.
+
+Previously, as Director of UX/Product Design at WebMD/Staywell and other enterprise organizations, I scaled teams by 500%, led portfolios of 15+ AI-driven healthcare initiatives, and streamlined end-to-end design operations to increase delivery speed by 30% while maintaining client satisfaction scores above 4.8/5. Across multiple organizations, I have consistently aligned UX strategy with executive vision, contributing to revenue growth, improved engagement, and operational efficiency.
+
+What distinguishes my leadership approach is the balance of vision and execution. I have built and mentored multidisciplinary teams, introduced scalable design systems, implemented experimentation frameworks, and partnered closely with engineering and product leadership to bring zero-to-one innovations to market. My foundation in web design and animation, combined with modern AI-driven product strategy, allows me to connect brand, experience, and technology in ways that drive measurable impact.
+
+I am excited about the opportunity to contribute strategic design leadership, foster innovation, and help shape the next phase of growth at ${job.company}. I welcome the opportunity to discuss how my experience can support your goals.
+
+Thank you for your time and consideration.
+
+Sincerely,
+${profile.fullName}
+${profile.phone}
+${profile.portfolio}`;
+}
+
+/**
  * Generate a customized cover letter for a specific job.
- * Falls back to the base letter if the API call fails.
+ * Falls back to a static template if the API call fails — never throws.
  */
 export async function generateCoverLetter(
   job: JobContext,
   profile: Profile
 ): Promise<CoverLetterResult> {
   let text: string;
+  let isFallback = false;
 
   try {
     text = await callClaude(job, profile);
   } catch (err) {
-    console.warn(`[cover-letter] Claude API failed for ${job.company} — ${job.title}: ${err}`);
-    text = BASE_COVER_LETTER;
+    console.warn(`[cover-letter] AI generation failed for ${job.company} — ${job.title}: ${err}`);
+    console.warn("[cover-letter] Using static fallback cover letter");
+    text = buildFallbackLetter(job, profile);
+    isFallback = true;
   }
 
-  const tempFilePath = writeTempFile(text, job.company, job.title);
-  return { text, tempFilePath };
+  try {
+    const tempFilePath = writeTempFile(text, job.company, job.title);
+    return { text, tempFilePath, isFallback };
+  } catch (err) {
+    console.error(`[cover-letter] Failed to write temp file: ${err}`);
+    const tempFilePath = path.join(os.tmpdir(), `cover-letter-fallback-${Date.now()}.txt`);
+    fs.writeFileSync(tempFilePath, text, "utf-8");
+    return { text, tempFilePath, isFallback };
+  }
 }
 
 async function callClaude(job: JobContext, profile: Profile): Promise<string> {
