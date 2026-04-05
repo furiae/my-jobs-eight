@@ -123,6 +123,8 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
         record.status = "applied";
         record.appliedAt = new Date();
         summary.applied++;
+        // Mark the job as applied in the jobs table too
+        await sql`UPDATE jobs SET applied_at = NOW() WHERE id = ${job.id}`;
       } else if (
         result.reason === "captcha_detected" ||
         result.reason === "no_submit_button" ||

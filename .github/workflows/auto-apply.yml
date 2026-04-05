@@ -2,13 +2,13 @@ name: Auto-Apply Jobs
 
 on:
   schedule:
-    # Every 2 hours
-    - cron: '0 */2 * * *'
+    # Every hour — with limit=50, this targets ~200+ attempts/day
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       limit:
         description: 'Max applications to attempt'
-        default: '10'
+        default: '50'
       dry_run:
         description: 'Dry run (filter only, no browser)'
         type: boolean
@@ -17,11 +17,32 @@ on:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
-      - name: Trigger auto-apply
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run auto-apply
         run: |
-          LIMIT="${{ github.event.inputs.limit || '10' }}"
-          DRY="${{ github.event.inputs.dry_run == 'true' && '1' || '0' }}"
-          curl -s -X POST \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/apply?limit=${LIMIT}&dry_run=${DRY}"
+          LIMIT="${{ github.event.inputs.limit || '50' }}"
+          DRY="${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}"
+          npx tsx scripts/run-apply.ts --limit "$LIMIT" $DRY
