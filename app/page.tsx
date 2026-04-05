@@ -15,7 +15,7 @@ interface Job {
   scraped_at: string;
 }
 
-const SOURCES = ["We Work Remotely", "Remote OK", "Remotive"];
+const SOURCES = ["We Work Remotely", "Remote OK", "Remotive", "UIUXJobsBoard", "RemoteJobs.io", "LinkedIn", "Indeed", "Dice", "Monster", "FlexJobs"];
 
 export default function Page() {
   const [jobs, setJobs] = useState<Job[]>([]);
