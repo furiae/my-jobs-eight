@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import { PROFILE } from "../profile";
 import type { ApplyResult, PhaseTimeouts } from "../types";
+import { detectSubmitSuccess } from "./detect-success";
 
 const DEFAULT_TIMEOUTS: PhaseTimeouts = { pageLoadMs: 45_000, formFillMs: 30_000, submitMs: 30_000 };
 
@@ -107,9 +108,8 @@ export async function applyGreenhouse(
     }
 
     // ── Submit phase ──
-    const submitBtn = page.locator(
-      'input[type="submit"], button[type="submit"]'
-    ).filter({ hasText: /submit|apply/i });
+    const submitBtnSelector = 'input[type="submit"], button[type="submit"]';
+    const submitBtn = page.locator(submitBtnSelector).filter({ hasText: /submit|apply/i });
 
     if ((await submitBtn.count()) === 0) {
       return { success: false, reason: "no_submit_button" };
@@ -117,18 +117,23 @@ export async function applyGreenhouse(
 
     const submitResult = await Promise.race([
       (async () => {
+        const preSubmitUrl = page.url();
+        const btnText = await submitBtn.first().textContent().catch(() => "");
+
         await submitBtn.first().click();
-        await page.waitForTimeout(3000);
 
-        const success =
-          (await page.locator("text=/thank you|application received|submitted/i").count()) > 0 ||
-          page.url().includes("confirmation") ||
-          page.url().includes("thank");
+        const detection = await detectSubmitSuccess(page, {
+          preSubmitUrl,
+          submitButtonSelector: submitBtnSelector,
+          submitButtonText: btnText ?? undefined,
+          formSelector: "#application_form, form#application",
+          spaWaitMs: 5000,
+        });
 
-        return { done: true, success } as const;
+        return { done: true, success: detection.success, signal: detection.signal } as const;
       })(),
-      new Promise<{ done: false }>((resolve) =>
-        setTimeout(() => resolve({ done: false }), timeouts.submitMs)
+      new Promise<{ done: false; success: false; signal?: string }>((resolve) =>
+        setTimeout(() => resolve({ done: false, success: false }), timeouts.submitMs)
       ),
     ]);
 
@@ -137,9 +142,13 @@ export async function applyGreenhouse(
       return { success: false, reason: `timeout_submit_${timeouts.submitMs}ms` };
     }
 
+    if (submitResult.signal) {
+      console.log(`[apply:greenhouse] success detection signal: ${submitResult.signal}`);
+    }
+
     return {
       success: submitResult.success,
-      reason: submitResult.success ? undefined : "submit_unclear",
+      reason: submitResult.success ? undefined : submitResult.signal ?? "submit_unclear",
       finalUrl: page.url(),
     };
   } catch (err) {

@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import { PROFILE } from "../profile";
 import type { ApplyResult, PhaseTimeouts } from "../types";
+import { detectSubmitSuccess } from "./detect-success";
 
 const DEFAULT_TIMEOUTS: PhaseTimeouts = { pageLoadMs: 45_000, formFillMs: 30_000, submitMs: 30_000 };
 
@@ -85,9 +86,8 @@ export async function applyWorkday(
     }
 
     // ── Submit phase ──
-    const submitBtn = page.locator(
-      'button[data-automation-id="bottom-navigation-next-button"], button:has-text("Submit"), button:has-text("Apply")'
-    ).first();
+    const submitBtnSelector = 'button[data-automation-id="bottom-navigation-next-button"], button:has-text("Submit"), button:has-text("Apply")';
+    const submitBtn = page.locator(submitBtnSelector).first();
 
     if ((await submitBtn.count()) === 0) {
       return { success: false, reason: "no_submit_button" };
@@ -95,18 +95,24 @@ export async function applyWorkday(
 
     const submitResult = await Promise.race([
       (async () => {
+        const preSubmitUrl = page.url();
+        const btnText = await submitBtn.textContent().catch(() => "");
+
         await submitBtn.click();
-        await page.waitForTimeout(4000);
 
-        const success =
-          (await page.locator("text=/thank you|application received|submitted|successfully/i").count()) > 0 ||
-          page.url().includes("confirmation") ||
-          page.url().includes("thank");
+        // Workday is a heavy SPA — give it extra time for transitions
+        const detection = await detectSubmitSuccess(page, {
+          preSubmitUrl,
+          submitButtonSelector: submitBtnSelector,
+          submitButtonText: btnText ?? undefined,
+          formSelector: undefined, // Workday doesn't reliably hide forms
+          spaWaitMs: 7000, // extra time for Workday SPA
+        });
 
-        return { done: true, success } as const;
+        return { done: true, success: detection.success, signal: detection.signal } as const;
       })(),
-      new Promise<{ done: false }>((resolve) =>
-        setTimeout(() => resolve({ done: false }), timeouts.submitMs)
+      new Promise<{ done: false; success: false; signal?: string }>((resolve) =>
+        setTimeout(() => resolve({ done: false, success: false }), timeouts.submitMs)
       ),
     ]);
 
@@ -115,9 +121,13 @@ export async function applyWorkday(
       return { success: false, reason: `timeout_submit_${timeouts.submitMs}ms` };
     }
 
+    if (submitResult.signal) {
+      console.log(`[apply:workday] success detection signal: ${submitResult.signal}`);
+    }
+
     return {
       success: submitResult.success,
-      reason: submitResult.success ? undefined : "submit_unclear",
+      reason: submitResult.success ? undefined : submitResult.signal ?? "submit_unclear",
       finalUrl: page.url(),
     };
   } catch (err) {
