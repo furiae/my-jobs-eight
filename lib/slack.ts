@@ -37,6 +37,37 @@ export async function postSlackMessage(text: string, blocks?: object[]): Promise
 }
 
 /**
+ * Notify the board that a task is blocked and needs human attention.
+ */
+export async function notifyBlockedTask(
+  identifier: string,
+  title: string,
+  blockerSummary: string,
+  issueUrl?: string,
+): Promise<boolean> {
+  const blocks = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `🚫 Blocked: ${identifier}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*${title}*\n\n${blockerSummary}` },
+    },
+    ...(issueUrl
+      ? [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: `<${issueUrl}|View in Paperclip>` },
+          },
+        ]
+      : []),
+  ];
+
+  return postSlackMessage(`Blocked: ${identifier} — ${title}`, blocks);
+}
+
+/**
  * Post a recommendation summary to Slack with a link to the Paperclip issue.
  */
 export async function notifyRecommendation(

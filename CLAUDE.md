@@ -10,6 +10,7 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `app/api/jobs/route.ts` — returns jobs from DB
 - `app/api/apply/route.ts` — triggers auto-apply run (POST) or lists applications (GET)
 - `app/api/cover-letter/route.ts` — AI cover letter generation
+- `app/api/notify-blocked/route.ts` — POST: sends Slack notification for blocked tasks (auth: CRON_SECRET)
 - `app/page.tsx` — client-side job listing UI with "New Jobs" / "Applied Jobs" tabs
 - `lib/db.ts` — Neon Postgres helpers
 - `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
@@ -18,7 +19,8 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `lib/apply/profile.ts` — Chris's profile data for form filling
 - `lib/apply/cover-letter.ts` — AI cover letter generation via Claude API
 - `lib/notify.ts` — notifications (Slack, Discord, email via Resend — secondary; primary tracking is in-app UI)
-- `lib/slack.ts` — general-purpose Slack messaging (recommendations, alerts, deploy notifications)
+- `lib/slack.ts` — general-purpose Slack messaging (recommendations, alerts, blocked-task notifications, deploy notifications)
+- `scripts/notify-blocked.ts` — CLI to send Slack notification for blocked tasks
 - `scripts/run-apply.ts` — CLI entry point for auto-apply (used by GitHub Actions)
 
 ## Environment
