@@ -13,6 +13,7 @@ export interface Job {
   source: string;
   posted_at: string | null;
   scraped_at: string;
+  applied_at: string | null;
 }
 
 export async function getJobs(
@@ -43,7 +44,7 @@ export async function getJobs(
   };
 }
 
-export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at">[]) {
+export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at" | "applied_at">[]) {
   if (jobs.length === 0) return 0;
 
   let inserted = 0;
@@ -62,4 +63,22 @@ export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at">[]) {
     inserted++;
   }
   return inserted;
+}
+
+export async function markJobApplied(jobId: string): Promise<Job | null> {
+  const rows = await sql`
+    UPDATE jobs SET applied_at = NOW()
+    WHERE id = ${jobId} AND applied_at IS NULL
+    RETURNING *
+  `;
+  return (rows[0] as Job) ?? null;
+}
+
+export async function unmarkJobApplied(jobId: string): Promise<Job | null> {
+  const rows = await sql`
+    UPDATE jobs SET applied_at = NULL
+    WHERE id = ${jobId}
+    RETURNING *
+  `;
+  return (rows[0] as Job) ?? null;
 }
