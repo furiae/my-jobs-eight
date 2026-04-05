@@ -14,9 +14,14 @@ import { applyLever } from "./ats/lever";
 import { applyWorkday } from "./ats/workday";
 import { applyGeneric } from "./ats/generic";
 import { generateCoverLetter, deleteTempFile } from "./cover-letter";
-import type { AtsPlatform, ApplicationRecord } from "./types";
+import type { AtsPlatform, ApplicationRecord, PhaseTimeouts } from "./types";
 
-const APPLY_TIMEOUT_MS = 60_000; // max time per application
+const APPLY_TIMEOUT_MS = 120_000; // max time per application
+const PHASE_TIMEOUTS: PhaseTimeouts = {
+  pageLoadMs: 45_000,
+  formFillMs: 30_000,
+  submitMs: 30_000,
+};
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 5_000; // 5s, 15s, 45s (×3 each retry)
 
@@ -127,7 +132,7 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
       const page = await context.newPage();
 
       // Navigate to job page to find "Apply" link
-      await page.goto(job.url, { waitUntil: "networkidle", timeout: 30000 });
+      await page.goto(job.url, { waitUntil: "networkidle", timeout: PHASE_TIMEOUTS.pageLoadMs });
 
       // Find apply link
       const applyUrl = await findApplyUrl(page, job.url);
@@ -297,13 +302,13 @@ async function dispatchApply(
 ) {
   switch (platform) {
     case "greenhouse":
-      return applyGreenhouse(page, url, coverLetterPath);
+      return applyGreenhouse(page, url, coverLetterPath, PHASE_TIMEOUTS);
     case "lever":
-      return applyLever(page, url, coverLetterPath);
+      return applyLever(page, url, coverLetterPath, PHASE_TIMEOUTS);
     case "workday":
-      return applyWorkday(page, url, coverLetterPath);
+      return applyWorkday(page, url, coverLetterPath, PHASE_TIMEOUTS);
     default:
-      return applyGeneric(page, url, coverLetterPath);
+      return applyGeneric(page, url, coverLetterPath, PHASE_TIMEOUTS);
   }
 }
 

@@ -11,6 +11,12 @@ export type AtsPlatform =
   | "generic"
   | "unknown";
 
+export interface PhaseTimeouts {
+  pageLoadMs: number;
+  formFillMs: number;
+  submitMs: number;
+}
+
 export interface ApplicationRecord {
   jobId: string;
   jobUrl: string;
