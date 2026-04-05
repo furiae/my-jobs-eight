@@ -17,6 +17,39 @@ import { generateCoverLetter, deleteTempFile } from "./cover-letter";
 import type { AtsPlatform, ApplicationRecord } from "./types";
 
 const APPLY_TIMEOUT_MS = 60_000; // max time per application
+const MAX_RETRIES = 3;
+const BACKOFF_BASE_MS = 5_000; // 5s, 15s, 45s (×3 each retry)
+
+/** Errors that are transient and worth retrying */
+function isTransientError(reason: string): boolean {
+  const transient = [
+    "timeout_",
+    "net::ERR_",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ENETUNREACH",
+    "ERR_NETWORK",
+    "Navigation timeout",
+    "page.goto: Timeout",
+    "Target closed",
+    "Protocol error",
+    "Session closed",
+  ];
+  return transient.some((t) => reason.includes(t));
+}
+
+/** Non-transient failures that should not be retried */
+function isNonRetryable(reason: string): boolean {
+  const permanent = [
+    "captcha_detected",
+    "no_submit_button",
+    "no_form_found",
+    "no_apply_link",
+    "form_validation",
+  ];
+  return permanent.some((t) => reason.includes(t));
+}
 
 export interface RunOptions {
   databaseUrl: string;
@@ -113,18 +146,48 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
       const platform = detectAts(applyUrl);
       record.atsPlatform = platform;
 
-      // Apply with timeout
-      const applyPage = await context.newPage();
-      const result = await Promise.race([
-        dispatchApply(applyPage, applyUrl, platform, coverLetter.tempFilePath),
-        timeout(APPLY_TIMEOUT_MS),
-      ]);
+      // Apply with timeout + retry logic
+      let result: import("./types").ApplyResult = { success: false, reason: "no_attempt" };
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const applyPage = await context.newPage();
+        result = await Promise.race([
+          dispatchApply(applyPage, applyUrl, platform, coverLetter.tempFilePath),
+          timeout(APPLY_TIMEOUT_MS),
+        ]);
+        await applyPage.close().catch(() => {});
+
+        if (result.success) break;
+
+        // Don't retry non-transient failures
+        if (result.reason && isNonRetryable(result.reason)) {
+          console.log(`[apply] ${job.company} — non-retryable: ${result.reason}`);
+          break;
+        }
+
+        // Only retry transient errors
+        if (result.reason && !isTransientError(result.reason)) {
+          console.log(`[apply] ${job.company} — unknown failure, not retrying: ${result.reason}`);
+          break;
+        }
+
+        if (attempt < MAX_RETRIES) {
+          const delayMs = BACKOFF_BASE_MS * Math.pow(3, attempt - 1);
+          console.log(
+            `[apply] ${job.company} — attempt ${attempt}/${MAX_RETRIES} failed (${result.reason}), retrying in ${delayMs / 1000}s...`
+          );
+          await sleep(delayMs);
+        } else {
+          console.log(
+            `[apply] ${job.company} — attempt ${attempt}/${MAX_RETRIES} failed (${result.reason}), giving up`
+          );
+        }
+      }
 
       if (result.success) {
         record.status = "applied";
         record.appliedAt = new Date();
         summary.applied++;
-        // Mark the job as applied in the jobs table too
         await sql`UPDATE jobs SET applied_at = NOW() WHERE id = ${job.id}`;
       } else if (
         result.reason === "captcha_detected" ||
