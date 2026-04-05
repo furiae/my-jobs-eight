@@ -1,9 +1,5 @@
 import type { ScrapedJob } from "./remoteok";
-
-/**
- * Scrapes Dice's public job search API for remote design/UX roles.
- * Uses Dice's public search API — no auth required.
- */
+import { withPage } from "./browser";
 
 const SEARCH_QUERIES = [
   "UX designer",
@@ -12,79 +8,59 @@ const SEARCH_QUERIES = [
   "Figma designer",
 ];
 
-interface DiceJob {
-  id?: string;
-  title?: string;
-  companyName?: string;
-  employerType?: string;
-  postedDate?: string;
-  detailsPageUrl?: string;
-  salary?: string;
-  modifiedDate?: string;
-  jobLocation?: {
-    displayName?: string;
-  };
-  summary?: string;
-}
-
-interface DiceResponse {
-  data?: DiceJob[];
-  count?: number;
-}
-
 export async function scrapeDice(): Promise<ScrapedJob[]> {
   const allJobs: ScrapedJob[] = [];
   const seenUrls = new Set<string>();
 
   for (const query of SEARCH_QUERIES) {
     try {
-      const params = new URLSearchParams({
-        q: query,
-        countryCode2: "US",
-        radius: "30",
-        radiusUnit: "mi",
-        page: "1",
-        pageSize: "20",
-        facets: "employmentType|postedDate|workFromHomeAvailability",
-        filters: "workFromHomeAvailability|TRUE",
-        language: "en",
+      const jobs = await withPage(async (page) => {
+        const encoded = encodeURIComponent(query);
+        await page.goto(
+          `https://www.dice.com/jobs?q=${encoded}&filters.isRemote=true`,
+          { waitUntil: "domcontentloaded", timeout: 20000 }
+        );
+        await page.waitForTimeout(5000);
+
+        return page.evaluate(() => {
+          // Dice uses regular anchor tags with /job-detail/ URLs
+          // Job titles are the anchors with actual text content linking to /job-detail/
+          const allLinks = Array.from(document.querySelectorAll('a[href*="/job-detail/"]'));
+          const jobMap = new Map<string, { title: string; url: string }>();
+
+          for (const a of allLinks) {
+            const href = (a as HTMLAnchorElement).href.split("?")[0];
+            const text = a.textContent?.trim() || "";
+            // Skip empty links and "Apply Now" / "Easy Apply" links
+            if (!text || text === "Apply Now" || text === "Easy Apply") continue;
+            if (!jobMap.has(href)) {
+              jobMap.set(href, { title: text, url: href });
+            }
+          }
+
+          return Array.from(jobMap.values()).map((job) => {
+            // Try to find company name near the job link
+            return {
+              title: job.title,
+              company: "", // Hard to extract reliably from Dice's Tailwind layout
+              url: job.url,
+            };
+          });
+        });
       });
 
-      const res = await fetch(
-        `https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search?${params.toString()}`,
-        {
-          headers: {
-            "User-Agent": "my-jobs-eight/1.0",
-            "x-api-key": "1YAt0R9wBg4WfsF9VB2778F5CHLAPMVN3WAZcKd8",
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!res.ok) continue;
-
-      const data: DiceResponse = await res.json();
-      const jobs = data.data || [];
-
       for (const job of jobs) {
-        const jobUrl = job.detailsPageUrl
-          ? (job.detailsPageUrl.startsWith("http")
-            ? job.detailsPageUrl
-            : `https://www.dice.com${job.detailsPageUrl}`)
-          : `https://www.dice.com/job-detail/${job.id}`;
-
-        if (seenUrls.has(jobUrl)) continue;
-        seenUrls.add(jobUrl);
-
+        if (!job.url || seenUrls.has(job.url)) continue;
+        seenUrls.add(job.url);
         allJobs.push({
-          url: jobUrl,
-          title: job.title || "",
-          company: job.companyName || "",
-          salary: job.salary || null,
-          location: job.jobLocation?.displayName || "Remote",
-          description: job.summary?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || "",
+          url: job.url,
+          title: job.title,
+          company: job.company,
+          salary: null,
+          location: "Remote",
+          description: "",
           source: "Dice",
-          posted_at: job.postedDate ? new Date(job.postedDate).toISOString() : null,
+          posted_at: null,
         });
       }
     } catch {

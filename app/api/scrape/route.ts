@@ -10,8 +10,9 @@ import { scrapeDice } from "@/lib/scrapers/dice";
 import { scrapeMonster } from "@/lib/scrapers/monster";
 import { scrapeFlexJobs } from "@/lib/scrapers/flexjobs";
 import { upsertJobs } from "@/lib/db";
+import { closeBrowser } from "@/lib/scrapers/browser";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET() {
   try {
@@ -43,6 +44,8 @@ export async function GET() {
       ])
     );
 
+    await closeBrowser();
+
     return NextResponse.json({
       ok: true,
       scraped: allJobs.length,
@@ -50,6 +53,7 @@ export async function GET() {
       sources,
     });
   } catch (err) {
+    await closeBrowser().catch(() => {});
     console.error("Scrape error:", err);
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }

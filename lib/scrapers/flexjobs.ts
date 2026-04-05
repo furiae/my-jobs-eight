@@ -1,10 +1,5 @@
 import type { ScrapedJob } from "./remoteok";
-
-/**
- * Scrapes FlexJobs' public job listings for remote design/UX roles.
- * Note: FlexJobs requires a paid membership for full details, but
- * public listings are still visible with title/company/location.
- */
+import { withPage } from "./browser";
 
 const CATEGORY_URLS = [
   "https://www.flexjobs.com/remote-jobs/graphic-design",
@@ -18,72 +13,78 @@ export async function scrapeFlexJobs(): Promise<ScrapedJob[]> {
 
   for (const categoryUrl of CATEGORY_URLS) {
     try {
-      const res = await fetch(categoryUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
+      const jobs = await withPage(async (page) => {
+        await page.goto(categoryUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
 
-      if (!res.ok) continue;
+        // Wait for job listings
+        await page.waitForSelector(".job-title, .sc-job-title, [data-testid='job-title']", { timeout: 10000 }).catch(() => {});
 
-      const html = await res.text();
+        return page.evaluate(() => {
+          const results: { title: string; company: string; location: string; url: string; description: string; posted: string }[] = [];
 
-      // FlexJobs uses structured job cards
-      const cards = html.match(/<a[^>]*class="[^"]*job-title[^"]*"[^>]*>[\s\S]*?<\/a>/g) ||
-        html.match(/<li[^>]*class="[^"]*job[^"]*"[^>]*>[\s\S]*?<\/li>/g) || [];
+          // Try JSON-LD
+          const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+          scripts.forEach((script) => {
+            try {
+              const data = JSON.parse(script.textContent || "");
+              const items = data.itemListElement || (Array.isArray(data) ? data : []);
+              for (const item of items) {
+                const p = item.item || item;
+                if (p["@type"] !== "JobPosting") continue;
+                results.push({
+                  title: p.title || "",
+                  company: p.hiringOrganization?.name || "",
+                  location: p.jobLocation?.address?.addressLocality || "Remote",
+                  url: p.url || "",
+                  description: (p.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000),
+                  posted: p.datePosted || "",
+                });
+              }
+            } catch { /* skip */ }
+          });
 
-      for (const card of cards) {
-        const href = card.match(/href="([^"]*)"/)?.[1] ?? "";
-        const title = card.match(/>([\s\S]*?)<\/a>/)?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
+          // Fallback: visible job cards
+          if (results.length === 0) {
+            const links = document.querySelectorAll("a.job-title, a.sc-job-title, [data-testid='job-title'] a, li.job a[href*='/job/']");
+            links.forEach((el) => {
+              const a = el as HTMLAnchorElement;
+              const title = a.textContent?.trim() || "";
+              const href = a.href || "";
 
-        if (!title || !href) continue;
-        const jobUrl = href.startsWith("http") ? href : `https://www.flexjobs.com${href}`;
-        if (seenUrls.has(jobUrl)) continue;
-        seenUrls.add(jobUrl);
+              if (title && href) {
+                const url = href.startsWith("http") ? href : `https://www.flexjobs.com${href}`;
+                const parentCard = a.closest("li, article, .job-card, [class*='job']");
+                const company = parentCard?.querySelector(".company, .sc-company-name, [data-testid='company-name']")?.textContent?.trim() || "";
 
-        allJobs.push({
-          url: jobUrl,
-          title,
-          company: "",
-          salary: null,
-          location: "Remote",
-          description: "",
-          source: "FlexJobs",
-          posted_at: null,
-        });
-      }
-
-      // Also try JSON-LD
-      const jsonLdBlocks = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g) || [];
-      for (const block of jsonLdBlocks) {
-        try {
-          const jsonStr = block.replace(/<\/?script[^>]*>/g, "").trim();
-          const data = JSON.parse(jsonStr);
-          const items = data.itemListElement || (Array.isArray(data) ? data : []);
-
-          for (const item of items) {
-            const posting = item.item || item;
-            if (posting["@type"] !== "JobPosting") continue;
-
-            const jobUrl = posting.url || "";
-            if (!jobUrl || seenUrls.has(jobUrl)) continue;
-            seenUrls.add(jobUrl);
-
-            allJobs.push({
-              url: jobUrl,
-              title: posting.title || "",
-              company: posting.hiringOrganization?.name || "",
-              salary: null,
-              location: posting.jobLocation?.address?.addressLocality || "Remote",
-              description: (posting.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000),
-              source: "FlexJobs",
-              posted_at: posting.datePosted ? new Date(posting.datePosted).toISOString() : null,
+                results.push({
+                  title,
+                  company,
+                  location: "Remote",
+                  url,
+                  description: "",
+                  posted: "",
+                });
+              }
             });
           }
-        } catch {
-          // skip malformed JSON-LD
-        }
+
+          return results;
+        });
+      });
+
+      for (const job of jobs) {
+        if (!job.url || seenUrls.has(job.url)) continue;
+        seenUrls.add(job.url);
+        allJobs.push({
+          url: job.url,
+          title: job.title,
+          company: job.company,
+          salary: null,
+          location: job.location,
+          description: job.description,
+          source: "FlexJobs",
+          posted_at: job.posted ? new Date(job.posted).toISOString() : null,
+        });
       }
     } catch {
       // skip failing categories

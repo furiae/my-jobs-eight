@@ -1,28 +1,11 @@
 import type { ScrapedJob } from "./remoteok";
-
-/**
- * Scrapes Monster's public job search for remote design/UX roles.
- */
+import { withPage } from "./browser";
 
 const SEARCH_QUERIES = [
-  "ux-designer",
-  "product-designer",
-  "ui-designer",
+  "ux designer",
+  "product designer",
+  "ui designer",
 ];
-
-interface MonsterJob {
-  jobId?: string;
-  title?: string;
-  company?: { name?: string };
-  jobPosting?: {
-    url?: string;
-    description?: string;
-    datePosted?: string;
-  };
-  compensation?: { salary?: string };
-  location?: { name?: string };
-  summary?: string;
-}
 
 export async function scrapeMonster(): Promise<ScrapedJob[]> {
   const allJobs: ScrapedJob[] = [];
@@ -30,76 +13,81 @@ export async function scrapeMonster(): Promise<ScrapedJob[]> {
 
   for (const query of SEARCH_QUERIES) {
     try {
-      // Monster has a public search results page
-      const url = `https://www.monster.com/jobs/search?q=${query}&where=remote&page=1&so=m.h.s`;
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
+      const jobs = await withPage(async (page) => {
+        const encoded = encodeURIComponent(query);
+        await page.goto(
+          `https://www.monster.com/jobs/search?q=${encoded}&where=remote&page=1&so=m.h.s`,
+          { waitUntil: "domcontentloaded", timeout: 20000 }
+        );
 
-      if (!res.ok) continue;
+        await page.waitForSelector("[data-testid='svx-job-card'], .job-cardstyle, [data-testid='jobTitle']", { timeout: 10000 }).catch(() => {});
 
-      const html = await res.text();
+        return page.evaluate(() => {
+          const results: { title: string; company: string; location: string; url: string; description: string; posted: string; salary: string }[] = [];
 
-      // Try JSON-LD structured data first
-      const jsonLdBlocks = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g) || [];
-      for (const block of jsonLdBlocks) {
-        try {
-          const jsonStr = block.replace(/<\/?script[^>]*>/g, "").trim();
-          const data = JSON.parse(jsonStr);
-          const postings = Array.isArray(data) ? data : [data];
+          // Try JSON-LD
+          const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+          scripts.forEach((script) => {
+            try {
+              const data = JSON.parse(script.textContent || "");
+              const postings = Array.isArray(data) ? data : [data];
+              for (const p of postings) {
+                if (p["@type"] !== "JobPosting") continue;
+                results.push({
+                  title: p.title || "",
+                  company: p.hiringOrganization?.name || "",
+                  location: p.jobLocation?.address?.addressLocality || "Remote",
+                  url: p.url || "",
+                  description: (p.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000),
+                  posted: p.datePosted || "",
+                  salary: p.baseSalary?.value ? `${p.baseSalary.currency || "USD"} ${p.baseSalary.value.minValue || ""}-${p.baseSalary.value.maxValue || ""}` : "",
+                });
+              }
+            } catch { /* skip */ }
+          });
 
-          for (const posting of postings) {
-            if (posting["@type"] !== "JobPosting") continue;
+          // Fallback: visible cards
+          if (results.length === 0) {
+            const cards = document.querySelectorAll("[data-testid='svx-job-card'], article, .job-cardstyle__container");
+            cards.forEach((card) => {
+              const titleEl = card.querySelector("[data-testid='jobTitle'] a, h2 a, a[href*='/job/']") as HTMLAnchorElement;
+              const companyEl = card.querySelector("[data-testid='company'], .company") as HTMLElement;
+              const locationEl = card.querySelector("[data-testid='jobLocation'], .location") as HTMLElement;
 
-            const jobUrl = posting.url || "";
-            if (!jobUrl || seenUrls.has(jobUrl)) continue;
-            seenUrls.add(jobUrl);
+              const title = titleEl?.textContent?.trim() || "";
+              const url = titleEl?.href || "";
 
-            allJobs.push({
-              url: jobUrl,
-              title: posting.title || "",
-              company: posting.hiringOrganization?.name || "",
-              salary: posting.baseSalary?.value
-                ? `${posting.baseSalary.currency || "USD"} ${posting.baseSalary.value.minValue || ""}-${posting.baseSalary.value.maxValue || ""}`
-                : null,
-              location: posting.jobLocation?.address?.addressLocality || "Remote",
-              description: (posting.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000),
-              source: "Monster",
-              posted_at: posting.datePosted ? new Date(posting.datePosted).toISOString() : null,
+              if (title && url) {
+                results.push({
+                  title,
+                  company: companyEl?.textContent?.trim() || "",
+                  location: locationEl?.textContent?.trim() || "Remote",
+                  url,
+                  description: "",
+                  posted: "",
+                  salary: "",
+                });
+              }
             });
           }
-        } catch {
-          // skip malformed JSON-LD
-        }
-      }
 
-      // Fallback: parse job cards from HTML
-      if (allJobs.length === 0) {
-        const cards = html.match(/<a[^>]*class="[^"]*job-cardstyle[^"]*"[^>]*href="([^"]*)"[\s\S]*?<\/a>/g) || [];
-        for (const card of cards) {
-          const href = card.match(/href="([^"]*)"/)?.[1] ?? "";
-          const title = card.match(/<h2[^>]*>([\s\S]*?)<\/h2>/)?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
-          const company = card.match(/<span[^>]*class="[^"]*company[^"]*"[^>]*>([\s\S]*?)<\/span>/)?.[1]?.trim() ?? "";
+          return results;
+        });
+      });
 
-          if (!title || !href) continue;
-          const jobUrl = href.startsWith("http") ? href : `https://www.monster.com${href}`;
-          if (seenUrls.has(jobUrl)) continue;
-          seenUrls.add(jobUrl);
-
-          allJobs.push({
-            url: jobUrl,
-            title,
-            company,
-            salary: null,
-            location: "Remote",
-            description: "",
-            source: "Monster",
-            posted_at: null,
-          });
-        }
+      for (const job of jobs) {
+        if (!job.url || seenUrls.has(job.url)) continue;
+        seenUrls.add(job.url);
+        allJobs.push({
+          url: job.url,
+          title: job.title,
+          company: job.company,
+          salary: job.salary && job.salary !== " -" ? job.salary : null,
+          location: job.location,
+          description: job.description,
+          source: "Monster",
+          posted_at: job.posted ? new Date(job.posted).toISOString() : null,
+        });
       }
     } catch {
       // skip failing queries
