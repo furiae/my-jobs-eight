@@ -18,6 +18,7 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `lib/apply/profile.ts` — Chris's profile data for form filling
 - `lib/apply/cover-letter.ts` — AI cover letter generation via Claude API
 - `lib/notify.ts` — notifications (Slack, Discord, email via Resend — secondary; primary tracking is in-app UI)
+- `lib/slack.ts` — general-purpose Slack messaging (recommendations, alerts, deploy notifications)
 - `scripts/run-apply.ts` — CLI entry point for auto-apply (used by GitHub Actions)
 
 ## Environment
@@ -28,7 +29,7 @@ Requires `DATABASE_URL` (Neon Postgres). Pull from Vercel:
 vercel env pull .env.local
 ```
 
-Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL` (push notifications are secondary — primary tracking is via the web UI).
+Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`. Slack Bot API: `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` (used for both auto-apply notifications and general agent alerts).
 
 ## Cron / Automation
 
@@ -61,6 +62,24 @@ Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, 
 - `supabase/migrations/` — DB schema migrations
 - `.github/workflows/auto-apply.yml` — hourly auto-apply CI job
 - `.github/workflows/scrape.yml` — scrape CI job
+
+## MCP Servers
+
+Project-level MCP config in `.mcp.json`:
+- **Playwright MCP** (`@playwright/mcp`) — browser automation by Microsoft. Used for ATS form-filling and site validation.
+- **Firecrawl MCP** (`firecrawl-mcp`) — structured web scraping by Mendable AI. Requires `FIRECRAWL_API_KEY`. Improves apply URL extraction.
+
+Security-rejected MCP skills (do not install):
+- LinkedIn Scraper MCP — violates LinkedIn ToS, stores session cookies, single-maintainer risk
+- BrowserTools MCP — explicitly deprecated by author, abandoned since March 2025
+- Hyperbrowser MCP — inactive 13+ months, cloud-routed data with less transparency
+
+## CTO Process: Recommendations
+
+When the CTO agent has tool/MCP/process recommendations:
+1. Create a Paperclip issue for each recommendation (assigned to board user)
+2. Send a Slack notification via `lib/slack.ts` so board gets notified
+3. Include security assessment, pros/cons, and plain-English explanation
 
 ## Known Issues
 
