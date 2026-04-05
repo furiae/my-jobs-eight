@@ -10,7 +10,7 @@ export interface ScrapedJob {
 }
 
 export async function scrapeRemoteOK(): Promise<ScrapedJob[]> {
-  const res = await fetch("https://remoteok.com/api", {
+  const res = await fetch("https://remoteok.com/json", {
     headers: { "User-Agent": "my-jobs-eight/1.0" },
   });
 
@@ -39,11 +39,13 @@ export async function scrapeRemoteOK(): Promise<ScrapedJob[]> {
       );
     })
     .map((job: Record<string, unknown>) => ({
-      url: String(job.url || `https://remoteOK.com/remote-jobs/${job.slug}`),
+      url: String(job.url || `https://remoteok.com/remote-jobs/${job.slug}`),
       title: String(job.position || ""),
       company: String(job.company || ""),
-      salary: job.salary ? String(job.salary) : null,
-      location: "Remote",
+      salary: job.salary_min || job.salary_max
+        ? [job.salary_min && `$${job.salary_min}`, job.salary_max && `$${job.salary_max}`].filter(Boolean).join(" - ")
+        : job.salary ? String(job.salary) : null,
+      location: String(job.location || "Remote"),
       description: String(job.description || ""),
       source: "Remote OK",
       posted_at: job.date ? new Date(String(job.date)).toISOString() : null,
