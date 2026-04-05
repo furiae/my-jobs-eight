@@ -344,12 +344,12 @@ export default function Page() {
                           Undo
                         </button>
                       )}
-                      {!appStatus && (
+                      {appStatus !== "applied" && (
                         <button
                           onClick={(e) => handleApply(e, job.id)}
-                          className="text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 hover:bg-blue-900/50 px-3 py-1.5 rounded-lg transition-colors"
+                          className="text-xs text-green-400 hover:text-green-300 bg-green-900/30 hover:bg-green-900/50 px-3 py-1.5 rounded-lg transition-colors font-medium"
                         >
-                          Mark Applied
+                          ✓ Mark Applied
                         </button>
                       )}
                       {job.cover_letter_text && (
