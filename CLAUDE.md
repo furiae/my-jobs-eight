@@ -46,9 +46,24 @@ Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, 
 6. Records result in `applications` table and marks `jobs.applied_at`
 7. Applied jobs appear in the "Applied Jobs" tab in the web UI with green checkmark and timestamp
 
+## Styling
+
+- Tailwind CSS v3.4 with PostCSS
+- `tailwind.config.js` — content paths: `app/`, `components/`, `lib/`
+- `postcss.config.mjs` — PostCSS with Tailwind plugin
+- `app/globals.css` — Tailwind directives (`@tailwind base/components/utilities`)
+- Next.js 16 with Turbopack (default bundler)
+
 ## Key Files
 
+- `tailwind.config.js` — Tailwind content config (required for CSS generation)
 - `vercel.json` — cron config
 - `supabase/migrations/` — DB schema migrations
 - `.github/workflows/auto-apply.yml` — hourly auto-apply CI job
 - `.github/workflows/scrape.yml` — scrape CI job
+
+## Known Issues
+
+- Auto-apply success rate is low (~7.5%) — most jobs result in `manual_required` due to missing apply URLs
+- DataAnnotation listings are spam/low-quality — should be filtered
+- Email notifications (Resend) may not be configured — see FUR-108
