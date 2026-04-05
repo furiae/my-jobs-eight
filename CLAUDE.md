@@ -10,14 +10,14 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `app/api/jobs/route.ts` — returns jobs from DB
 - `app/api/apply/route.ts` — triggers auto-apply run (POST) or lists applications (GET)
 - `app/api/cover-letter/route.ts` — AI cover letter generation
-- `app/page.tsx` — client-side job listing UI
+- `app/page.tsx` — client-side job listing UI with "New Jobs" / "Applied Jobs" tabs
 - `lib/db.ts` — Neon Postgres helpers
 - `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
 - `lib/apply/engine.ts` — auto-apply engine (fetches un-applied jobs, filters, runs Playwright)
 - `lib/apply/ats/` — ATS-specific form fillers (Greenhouse, Lever, Workday, Ashby, generic)
 - `lib/apply/profile.ts` — Chris's profile data for form filling
 - `lib/apply/cover-letter.ts` — AI cover letter generation via Claude API
-- `lib/notify.ts` — notifications (Slack, Discord, email via Resend, Paperclip tasks)
+- `lib/notify.ts` — notifications (Slack, Discord, email via Resend — secondary; primary tracking is in-app UI)
 - `scripts/run-apply.ts` — CLI entry point for auto-apply (used by GitHub Actions)
 
 ## Environment
@@ -28,7 +28,7 @@ Requires `DATABASE_URL` (Neon Postgres). Pull from Vercel:
 vercel env pull .env.local
 ```
 
-Other env vars: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, `CRON_SECRET`.
+Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL` (push notifications are secondary — primary tracking is via the web UI).
 
 ## Cron / Automation
 
@@ -44,7 +44,7 @@ Other env vars: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DI
 4. Detects ATS platform (Greenhouse, Lever, Workday, or generic)
 5. Fills form fields, uploads resume + cover letter, submits
 6. Records result in `applications` table and marks `jobs.applied_at`
-7. Sends notifications (email, Slack, Discord)
+7. Applied jobs appear in the "Applied Jobs" tab in the web UI with green checkmark and timestamp
 
 ## Key Files
 

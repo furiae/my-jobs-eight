@@ -21,7 +21,7 @@ interface Job {
   apply_url: string | null;
 }
 
-type StatusFilter = "all" | "applied" | "failed" | "manual_required" | "not_applied";
+type Tab = "new" | "applied";
 
 const SOURCES = ["We Work Remotely", "Remote OK", "Remotive", "UIUXJobsBoard", "RemoteJobs.io", "LinkedIn", "Indeed", "Dice", "Monster", "FlexJobs"];
 
@@ -40,7 +40,7 @@ export default function Page() {
   const [scraping, setScraping] = useState(false);
   const [filter, setFilter] = useState("");
   const [source, setSource] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [activeTab, setActiveTab] = useState<Tab>("new");
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const [expandedCoverLetter, setExpandedCoverLetter] = useState<string | null>(null);
 
@@ -122,26 +122,14 @@ export default function Page() {
       return false;
     }
     const appStatus = getAppStatus(j);
-    switch (statusFilter) {
-      case "applied":
-        return appStatus === "applied";
-      case "failed":
-        return appStatus === "failed";
-      case "manual_required":
-        return appStatus === "manual_required";
-      case "not_applied":
-        return !appStatus || appStatus === "skipped";
-      default:
-        return true;
+    if (activeTab === "applied") {
+      return appStatus === "applied";
     }
+    return appStatus !== "applied";
   });
 
-  const statusCounts = {
-    applied: jobs.filter((j) => getAppStatus(j) === "applied").length,
-    failed: jobs.filter((j) => getAppStatus(j) === "failed").length,
-    manual_required: jobs.filter((j) => getAppStatus(j) === "manual_required").length,
-    not_applied: jobs.filter((j) => { const s = getAppStatus(j); return !s || s === "skipped"; }).length,
-  };
+  const appliedCount = jobs.filter((j) => getAppStatus(j) === "applied").length;
+  const newCount = jobs.length - appliedCount;
 
   const toggleExpand = (e: React.MouseEvent, jobId: string) => {
     e.preventDefault();
@@ -155,14 +143,6 @@ export default function Page() {
     setExpandedCoverLetter(expandedCoverLetter === jobId ? null : jobId);
   };
 
-  const statusFilterButtons: { key: StatusFilter; label: string; count: number; activeClass: string }[] = [
-    { key: "all", label: "All", count: jobs.length, activeClass: "bg-blue-600 text-white" },
-    { key: "applied", label: "Applied", count: statusCounts.applied, activeClass: "bg-green-600 text-white" },
-    { key: "failed", label: "Failed", count: statusCounts.failed, activeClass: "bg-red-600 text-white" },
-    { key: "manual_required", label: "Manual", count: statusCounts.manual_required, activeClass: "bg-yellow-600 text-white" },
-    { key: "not_applied", label: "Not Applied", count: statusCounts.not_applied, activeClass: "bg-gray-600 text-white" },
-  ];
-
   const cardBorder = (job: Job) => {
     const status = getAppStatus(job);
     switch (status) {
@@ -175,21 +155,15 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="border-b border-gray-800 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">My Jobs</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              Remote design jobs — Product Designer, UX Designer, Figma Designer
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {statusCounts.applied > 0 && (
-              <span className="text-sm text-green-400">{statusCounts.applied} applied</span>
-            )}
-            {statusCounts.failed > 0 && (
-              <span className="text-sm text-red-400">{statusCounts.failed} failed</span>
-            )}
+      <header className="border-b border-gray-800">
+        <div className="max-w-5xl mx-auto px-6 pt-4 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">My Jobs</h1>
+              <p className="text-sm text-gray-400 mt-0.5">
+                Remote design jobs — Product Designer, UX Designer, Figma Designer
+              </p>
+            </div>
             <button
               onClick={handleScrape}
               disabled={scraping}
@@ -198,6 +172,33 @@ export default function Page() {
               {scraping ? "Refreshing…" : "Refresh Now"}
             </button>
           </div>
+          <nav className="flex gap-0">
+            <button
+              onClick={() => setActiveTab("new")}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "new"
+                  ? "border-blue-500 text-white"
+                  : "border-transparent text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              New Jobs
+              {newCount > 0 && <span className="ml-2 text-xs opacity-60">({newCount})</span>}
+            </button>
+            <button
+              onClick={() => setActiveTab("applied")}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                activeTab === "applied"
+                  ? "border-green-500 text-white"
+                  : "border-transparent text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Applied Jobs
+              {appliedCount > 0 && <span className="ml-1.5 text-xs opacity-60">({appliedCount})</span>}
+            </button>
+          </nav>
         </div>
       </header>
 
@@ -210,24 +211,6 @@ export default function Page() {
             onChange={(e) => setFilter(e.target.value)}
             className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
           />
-          <div className="flex gap-2 flex-wrap">
-            {statusFilterButtons.map((btn) => (
-              <button
-                key={btn.key}
-                onClick={() => setStatusFilter(btn.key)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === btn.key
-                    ? btn.activeClass
-                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                }`}
-              >
-                {btn.label}
-                {btn.count > 0 && (
-                  <span className="ml-1.5 text-xs opacity-75">({btn.count})</span>
-                )}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="flex gap-2 flex-wrap mb-4">
@@ -292,9 +275,23 @@ export default function Page() {
                           <span className="ml-2 text-green-400">{job.salary}</span>
                         )}
                       </p>
-                      {/* ATS platform + status row */}
+                      {/* Status + ATS row */}
                       <div className="flex items-center gap-2 mt-1.5">
-                        {badge && (
+                        {appStatus === "applied" && (
+                          <span className="inline-flex items-center gap-1 text-xs text-green-400 bg-green-900/50 px-2 py-0.5 rounded font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Applied
+                          </span>
+                        )}
+                        {appStatus === "applied" && job.applied_at && (
+                          <span className="text-xs text-green-500/70">
+                            {new Date(job.applied_at).toLocaleDateString()}{" "}
+                            {new Date(job.applied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                        {badge && appStatus !== "applied" && (
                           <span className={`text-xs ${badge.text} ${badge.bg} px-2 py-0.5 rounded`}>
                             {badge.label}
                           </span>
@@ -302,12 +299,6 @@ export default function Page() {
                         {job.ats_platform && (
                           <span className="text-xs text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded">
                             {job.ats_platform}
-                          </span>
-                        )}
-                        {job.applied_at && appStatus === "applied" && (
-                          <span className="text-xs text-gray-500">
-                            {new Date(job.applied_at).toLocaleDateString()}{" "}
-                            {new Date(job.applied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         )}
                       </div>
