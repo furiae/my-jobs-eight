@@ -14,7 +14,7 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `lib/db.ts` — Neon Postgres helpers
 - `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
 - `lib/apply/engine.ts` — auto-apply engine (fetches un-applied jobs, filters, runs Playwright)
-- `lib/apply/ats/` — ATS-specific form fillers (Greenhouse, Lever, Workday, generic)
+- `lib/apply/ats/` — ATS-specific form fillers (Greenhouse, Lever, Workday, Ashby, generic)
 - `lib/apply/profile.ts` — Chris's profile data for form filling
 - `lib/apply/cover-letter.ts` — AI cover letter generation via Claude API
 - `lib/notify.ts` — notifications (Slack, Discord, email via Resend, Paperclip tasks)

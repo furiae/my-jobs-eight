@@ -8,6 +8,7 @@ export type AtsPlatform =
   | "greenhouse"
   | "lever"
   | "workday"
+  | "ashby"
   | "generic"
   | "unknown";
 

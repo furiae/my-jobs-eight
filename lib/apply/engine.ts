@@ -12,6 +12,7 @@ import { titleMatches, salaryAboveFloor, PROFILE } from "./profile";
 import { applyGreenhouse } from "./ats/greenhouse";
 import { applyLever } from "./ats/lever";
 import { applyWorkday } from "./ats/workday";
+import { applyAshby } from "./ats/ashby";
 import { applyGeneric } from "./ats/generic";
 import { generateCoverLetter, deleteTempFile } from "./cover-letter";
 import type { AtsPlatform, ApplicationRecord, PhaseTimeouts } from "./types";
@@ -291,6 +292,7 @@ function detectAts(url: string): AtsPlatform {
   if (url.includes("greenhouse.io") || url.includes("boards.greenhouse")) return "greenhouse";
   if (url.includes("lever.co")) return "lever";
   if (url.includes("workday.com") || url.includes("myworkdayjobs.com")) return "workday";
+  if (url.includes("ashbyhq.com")) return "ashby";
   return "generic";
 }
 
@@ -307,6 +309,8 @@ async function dispatchApply(
       return applyLever(page, url, coverLetterPath, PHASE_TIMEOUTS);
     case "workday":
       return applyWorkday(page, url, coverLetterPath, PHASE_TIMEOUTS);
+    case "ashby":
+      return applyAshby(page, url, coverLetterPath, PHASE_TIMEOUTS);
     default:
       return applyGeneric(page, url, coverLetterPath, PHASE_TIMEOUTS);
   }
