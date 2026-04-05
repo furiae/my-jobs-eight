@@ -14,6 +14,11 @@ export interface Job {
   posted_at: string | null;
   scraped_at: string;
   applied_at: string | null;
+  application_status: string | null;
+  ats_platform: string | null;
+  error_message: string | null;
+  cover_letter_text: string | null;
+  apply_url: string | null;
 }
 
 export async function getJobs(
@@ -23,14 +28,18 @@ export async function getJobs(
 ): Promise<{ jobs: Job[]; total: number }> {
   const rows = source
     ? await sql`
-        SELECT * FROM jobs
-        WHERE source = ${source}
-        ORDER BY scraped_at DESC
+        SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
+        FROM jobs j
+        LEFT JOIN applications a ON a.job_id = j.id
+        WHERE j.source = ${source}
+        ORDER BY j.scraped_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `
     : await sql`
-        SELECT * FROM jobs
-        ORDER BY scraped_at DESC
+        SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
+        FROM jobs j
+        LEFT JOIN applications a ON a.job_id = j.id
+        ORDER BY j.scraped_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
 
@@ -44,7 +53,7 @@ export async function getJobs(
   };
 }
 
-export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at" | "applied_at">[]) {
+export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at" | "applied_at" | "application_status" | "ats_platform" | "error_message" | "cover_letter_text" | "apply_url">[]) {
   if (jobs.length === 0) return 0;
 
   let inserted = 0;
