@@ -1,6 +1,10 @@
 // Chris Johnson's personal profile for auto-filling job application forms.
 // Update this file when personal info changes.
 
+import * as path from "path";
+
+const DATA_DIR = path.join(process.cwd(), "data", "resume");
+
 export const PROFILE = {
   firstName: "Chris",
   lastName: "Johnson",
@@ -38,9 +42,9 @@ export const PROFILE = {
     "Figma Designer",
   ],
 
-  resumePath: `${process.env.HOME}/Desktop/claude/resume/Chris-Johnson-Resume-Feb-2026.pdf`,
-  coverLetterPath: `${process.env.HOME}/Desktop/claude/resume/Chris Johnson Cover Letter.pdf`,
-  portfolioPdfPath: `${process.env.HOME}/Desktop/claude/resume/Chris-Johnson-UX-Portfolio.pdf`,
+  resumePath: path.join(DATA_DIR, "Chris-Johnson-Resume-Feb-2026.pdf"),
+  coverLetterPath: path.join(DATA_DIR, "Chris Johnson Cover Letter.pdf"),
+  portfolioPdfPath: path.join(DATA_DIR, "Chris-Johnson-UX-Portfolio.pdf"),
 } as const;
 
 export type Profile = typeof PROFILE;
