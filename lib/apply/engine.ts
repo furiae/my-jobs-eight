@@ -11,6 +11,7 @@ import { neon } from "@neondatabase/serverless";
 import { titleMatches, salaryAboveFloor, PROFILE } from "./profile";
 import { applyGreenhouse } from "./ats/greenhouse";
 import { applyLever } from "./ats/lever";
+import { applyWorkday } from "./ats/workday";
 import { applyGeneric } from "./ats/generic";
 import { generateCoverLetter, deleteTempFile } from "./cover-letter";
 import type { AtsPlatform, ApplicationRecord } from "./types";
@@ -165,21 +166,49 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function findApplyUrl(
-  page: { locator: Function; url: Function },
+  page: any,
   jobUrl: string
 ): Promise<string | null> {
   try {
-    // Look for explicit Apply button/link
-    const applyLink = (page as any).locator(
-      'a:has-text("Apply"), a[href*="apply"], button:has-text("Apply Now")'
-    ).first();
+    // Broad set of selectors for apply links/buttons
+    const selectors = [
+      'a[href*="apply"]',
+      'a:has-text("Apply")',
+      'a:has-text("Apply Now")',
+      'a:has-text("Apply for this")',
+      'a:has-text("Submit Application")',
+      'button:has-text("Apply")',
+      'button:has-text("Apply Now")',
+      '.apply-button a',
+      '.job-apply a',
+      '[class*="apply"] a',
+      '[data-action="apply"] a',
+    ];
 
-    if (await applyLink.count() > 0) {
-      const href = await applyLink.getAttribute("href");
-      if (href) {
-        return href.startsWith("http") ? href : new URL(href, jobUrl).toString();
+    for (const selector of selectors) {
+      const el = page.locator(selector).first();
+      if ((await el.count()) > 0) {
+        const href = await el.getAttribute("href");
+        if (href) {
+          return href.startsWith("http") ? href : new URL(href, jobUrl).toString();
+        }
+        // It's a button — click it and capture navigation
+        const [newPage] = await Promise.all([
+          page.context().waitForEvent("page", { timeout: 5000 }).catch(() => null),
+          el.click().catch(() => {}),
+        ]);
+        if (newPage) {
+          const url = newPage.url();
+          await newPage.close();
+          return url;
+        }
+        // Same-page navigation after click
+        await page.waitForTimeout(2000);
+        const currentUrl = page.url();
+        if (currentUrl !== jobUrl) {
+          return currentUrl;
+        }
       }
-      // Button — try clicking and see where we end up
     }
     return null;
   } catch {
@@ -205,6 +234,8 @@ async function dispatchApply(
       return applyGreenhouse(page, url, coverLetterPath);
     case "lever":
       return applyLever(page, url, coverLetterPath);
+    case "workday":
+      return applyWorkday(page, url, coverLetterPath);
     default:
       return applyGeneric(page, url, coverLetterPath);
   }
