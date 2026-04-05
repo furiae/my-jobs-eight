@@ -12,6 +12,14 @@ jobs:
     steps:
       - name: Trigger scrape
         run: |
-          curl -s -X POST \
+          URL="${{ secrets.NEXT_PUBLIC_APP_URL }}"
+          if [ -z "$URL" ]; then
+            echo "::error::NEXT_PUBLIC_APP_URL secret is not set"
+            exit 1
+          fi
+          RESPONSE=$(curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.SCRAPE_SECRET }}" \
-            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/scrape"
+            "$URL/api/scrape")
+          echo "$RESPONSE" | head -c 500
+          echo ""
+          echo "$RESPONSE" | grep -q '"ok":true' || { echo "::error::Scrape returned error"; exit 1; }
