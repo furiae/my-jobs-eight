@@ -1,0 +1,290 @@
+# Slack Integration Setup for Paperclip + Jobs Board
+
+This guide explains how to set up Slack notifications for the Furiae Jobs Board project so that a Paperclip CTO agent can notify you via Slack when tasks are blocked, completed, or need your attention.
+
+---
+
+## Overview
+
+The integration uses a **Slack Bot** (via Bot OAuth Token) to post messages to a specific channel. The bot posts notifications for:
+
+1. **Blocked tasks** — when the CTO agent is stuck and needs human input
+2. **Completed tickets** — when auto-apply runs finish (with success/failure breakdown)
+3. **Attention needed** — CTO recommendations, deploy notifications, and manual-apply alerts
+
+### Architecture
+
+```
+Paperclip Agent (CTO)
+  └─> lib/slack.ts (postSlackMessage)
+        └─> Slack Web API (chat.postMessage)
+              └─> Your Slack channel
+
+GitHub Actions (Auto-Apply)
+  └─> lib/notify.ts (notifySlack)
+        └─> Slack Web API (chat.postMessage)
+              └─> Your Slack channel
+
+API Endpoint (/api/notify-blocked)
+  └─> lib/slack.ts (notifyBlockedTask)
+        └─> Slack Web API (chat.postMessage)
+              └─> Your Slack channel
+```
+
+---
+
+## Step 1: Create a Slack App
+
+1. Go to [https://api.slack.com/apps](https://api.slack.com/apps)
+2. Click **"Create New App"** > **"From scratch"**
+3. Name it something like `Furiae Bot` (or any name you prefer)
+4. Select your Slack workspace
+5. Click **"Create App"**
+
+## Step 2: Configure Bot Scopes
+
+1. In the app settings sidebar, go to **"OAuth & Permissions"**
+2. Scroll to **"Scopes"** > **"Bot Token Scopes"**
+3. Add the following scopes:
+
+| Scope | Purpose |
+|-------|---------|
+| `chat:write` | Post messages to channels the bot is a member of |
+| `chat:write.public` | Post messages to any public channel without joining (recommended) |
+| `channels:read` | Read basic channel info |
+| `channels:history` | Read message history (optional, for context) |
+| `im:write` | Send direct messages (optional) |
+| `users:read` | Look up user info (optional) |
+
+**Minimum required:** `chat:write` and `chat:write.public`
+
+The `chat:write.public` scope is key — it lets the bot post to public channels without needing to be manually invited.
+
+## Step 3: Install the App to Your Workspace
+
+1. Still in **"OAuth & Permissions"**, scroll to the top
+2. Click **"Install to Workspace"** (or "Reinstall" if updating scopes)
+3. Review the permissions and click **"Allow"**
+4. Copy the **"Bot User OAuth Token"** — it starts with `xoxb-`
+
+**Save this token** — you'll need it as `SLACK_BOT_TOKEN` in the next steps.
+
+## Step 4: Get Your Channel ID
+
+1. Open Slack and navigate to the channel where you want notifications
+2. Right-click the channel name > **"View channel details"** (or click the channel name at the top)
+3. Scroll to the bottom of the details panel
+4. Copy the **Channel ID** — it looks like `C0AQVDCMTM3`
+
+Alternatively, in the Slack desktop app:
+- Right-click the channel > "Copy" > "Copy link"
+- The URL contains the channel ID: `https://app.slack.com/client/T.../C0AQVDCMTM3`
+
+**Save this ID** — you'll need it as `SLACK_CHANNEL_ID`.
+
+## Step 5: Set Environment Variables
+
+You need to set `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` in **three places**:
+
+### 5a. Vercel (for production API endpoints)
+
+```bash
+# From the project directory (must have vercel CLI linked)
+vercel env add SLACK_BOT_TOKEN
+# Paste your xoxb-... token when prompted
+# Select: Production, Preview, Development
+
+vercel env add SLACK_CHANNEL_ID
+# Paste your channel ID (e.g., C0AQVDCMTM3)
+# Select: Production, Preview, Development
+```
+
+Or set them in the Vercel Dashboard:
+1. Go to your project > Settings > Environment Variables
+2. Add `SLACK_BOT_TOKEN` with your `xoxb-...` token
+3. Add `SLACK_CHANNEL_ID` with your channel ID
+4. Enable for Production, Preview, and Development environments
+
+### 5b. GitHub Actions (for auto-apply workflow notifications)
+
+```bash
+# Using gh CLI
+gh secret set SLACK_BOT_TOKEN --repo <owner>/<repo>
+# Paste your xoxb-... token
+
+gh secret set SLACK_CHANNEL_ID --repo <owner>/<repo>
+# Paste your channel ID
+```
+
+Or in GitHub:
+1. Go to repo > Settings > Secrets and variables > Actions
+2. Add `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` as repository secrets
+
+### 5c. Local development (.env.local)
+
+```bash
+# Pull from Vercel (easiest)
+vercel env pull .env.local
+
+# Or add manually to .env.local
+echo 'SLACK_BOT_TOKEN=xoxb-your-token-here' >> .env.local
+echo 'SLACK_CHANNEL_ID=C0AQVDCMTM3' >> .env.local
+```
+
+## Step 6: Also Set CRON_SECRET (for /api/notify-blocked endpoint)
+
+The `/api/notify-blocked` endpoint requires authentication via `CRON_SECRET`. This is used when the CTO agent or CLI scripts call the endpoint to report blocked tasks.
+
+```bash
+# Generate a random secret
+openssl rand -hex 32
+
+# Set it in Vercel
+vercel env add CRON_SECRET
+# Paste the generated secret
+# Select: Production, Preview, Development
+
+# Set it in GitHub Actions
+gh secret set CRON_SECRET --repo <owner>/<repo>
+
+# Set it locally
+echo 'CRON_SECRET=your-generated-secret' >> .env.local
+```
+
+## Step 7: Test the Integration
+
+### Quick test (post a message directly)
+
+```bash
+curl -X POST https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer xoxb-YOUR-TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"channel":"YOUR_CHANNEL_ID","text":"Test message from Furiae bot"}'
+```
+
+You should see `{"ok":true,...}` and the message in your Slack channel.
+
+### Test via the notify-blocked endpoint
+
+```bash
+curl -X POST https://your-app.vercel.app/api/notify-blocked \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "TEST-001",
+    "title": "Test blocked task",
+    "blockerSummary": "This is a test notification"
+  }'
+```
+
+### Test via CLI script (local)
+
+```bash
+npx tsx scripts/notify-blocked.ts TEST-001 "Test task" "Testing Slack notifications"
+```
+
+---
+
+## How Notifications Work
+
+### 1. Blocked Task Notifications
+
+**When:** The CTO agent encounters a blocker on any task.
+
+**How it works:**
+- The agent calls `POST /api/notify-blocked` with the task details
+- The endpoint calls `notifyBlockedTask()` from `lib/slack.ts`
+- A rich Slack message is posted with the task identifier, title, blocker description, and a link to the Paperclip issue
+
+**Slack message format:**
+```
+🚫 Blocked: FUR-123
+Task Title Here
+
+Description of what's blocking progress and who needs to act.
+
+View in Paperclip (link)
+```
+
+### 2. Auto-Apply Run Notifications
+
+**When:** The hourly auto-apply workflow completes (via GitHub Actions).
+
+**How it works:**
+- After `scripts/run-apply.ts` finishes, it calls `sendNotifications()` from `lib/notify.ts`
+- `notifySlack()` posts a summary with applied/failed/manual counts and per-job details
+
+**Slack message format:**
+```
+Job Application Run — Apr 5, 2026
+
+Attempted: 12  |  Applied ✅: 3  |  Manual needed 👋: 7  |  Failed ❌: 2
+
+✅ Senior UX Designer @ Acme Corp
+👋 Product Designer @ StartupCo — manual_required: no_apply_url
+❌ UI Designer @ BigTech — failed: timeout_loading_page
+...
+```
+
+### 3. CTO Recommendations
+
+**When:** The CTO agent has tool/MCP/process recommendations.
+
+**How it works:**
+- The agent calls `notifyRecommendation()` from `lib/slack.ts`
+- A summary is posted with a link to the full Paperclip issue
+
+**Slack message format:**
+```
+💡 CTO Recommendation: Install Firecrawl MCP
+Summary of the recommendation with pros/cons...
+
+View in Paperclip (link)
+```
+
+---
+
+## Environment Variables Summary
+
+| Variable | Where to Set | Required | Purpose |
+|----------|-------------|----------|---------|
+| `SLACK_BOT_TOKEN` | Vercel, GitHub Actions, .env.local | Yes | Slack Bot OAuth token (`xoxb-...`) |
+| `SLACK_CHANNEL_ID` | Vercel, GitHub Actions, .env.local | Yes | Target Slack channel ID (`C...`) |
+| `CRON_SECRET` | Vercel, GitHub Actions, .env.local | Yes | Auth for /api/notify-blocked endpoint |
+| `SLACK_WEBHOOK_URL` | GitHub Actions | No | Legacy fallback (not needed if bot token is set) |
+
+---
+
+## Relevant Source Files
+
+| File | Purpose |
+|------|---------|
+| `lib/slack.ts` | Core Slack messaging: `postSlackMessage()`, `notifyBlockedTask()`, `notifyRecommendation()` |
+| `lib/notify.ts` | Auto-apply notifications: `notifySlack()`, `notifyEmail()`, `notifyDiscord()`, `notifyPaperclip()` |
+| `app/api/notify-blocked/route.ts` | API endpoint for blocked task alerts (auth via CRON_SECRET) |
+| `scripts/notify-blocked.ts` | CLI script to send blocked-task notifications locally |
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `channel_not_found` | Verify `SLACK_CHANNEL_ID` is correct (check channel details in Slack) |
+| `not_in_channel` | Either invite the bot to the channel, or ensure bot has `chat:write.public` scope |
+| `invalid_auth` | Regenerate the Bot OAuth Token and update all three locations |
+| `missing_scope` | Add the required scope in Slack App settings > OAuth & Permissions, reinstall app |
+| No messages appearing | Check Vercel runtime logs for `[slack]` errors; verify env vars with `vercel env ls` |
+| GitHub Actions not notifying | Check `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` are set as repo secrets |
+
+---
+
+## For the CTO Agent (Paperclip)
+
+The CTO agent should use `lib/slack.ts` functions to send notifications. The agent instructions (`AGENTS.md`) specify:
+
+- **When making recommendations:** Create a Paperclip issue AND send a Slack notification via `lib/slack.ts`
+- **When blocked:** Update the issue status to `blocked` AND call `/api/notify-blocked`
+- **Idle behavior:** Research MCP/tool recommendations and post findings as a Paperclip issue + Slack notification
+
+The agent does NOT need to handle Slack setup — that's a one-time human task described above.
