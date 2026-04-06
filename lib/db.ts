@@ -112,6 +112,17 @@ export async function getUnprocessedSlackReplies(): Promise<SlackReply[]> {
   return rows as SlackReply[];
 }
 
+/** Fetch only unprocessed GENERAL (non-threaded) Slack messages for triage. */
+export async function getUnprocessedGeneralReplies(): Promise<SlackReply[]> {
+  const rows = await sql`
+    SELECT id, issue_identifier, slack_user, reply_text, created_at
+    FROM slack_replies
+    WHERE processed_at IS NULL AND issue_identifier = 'GENERAL'
+    ORDER BY created_at ASC
+  `;
+  return rows as SlackReply[];
+}
+
 export async function markSlackRepliesProcessed(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
   await sql`

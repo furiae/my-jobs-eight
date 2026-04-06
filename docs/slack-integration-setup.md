@@ -342,10 +342,36 @@ Wait for the deployment to complete.
 3. Type a message like "Thanks, looks good!"
 4. Check the Paperclip issue — your reply should appear as a comment
 
+### Non-threaded (channel) messages
+
+Top-level messages in the channel (not replies to a bot notification) are also captured. These are stored in the `slack_replies` table with `issue_identifier = 'GENERAL'` since they don't map to a specific Paperclip issue.
+
+**How triage works:**
+
+1. Non-threaded messages are stored with identifier `GENERAL`
+2. The CTO agent calls `GET /api/slack/triage` during heartbeats to fetch unprocessed GENERAL messages
+3. For each message, the agent creates a new Paperclip issue (triaged from Slack)
+4. The agent calls `POST /api/slack/triage` with the processed message IDs to mark them done
+
+**Triage API endpoints** (auth: `CRON_SECRET`):
+
+```bash
+# Fetch unprocessed GENERAL messages
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  https://your-app.vercel.app/api/slack/triage
+
+# Mark messages as processed
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  https://your-app.vercel.app/api/slack/triage \
+  -d '{"ids": [1, 2, 3]}'
+```
+
 ### Important notes
 
-- **Thread replies only** — top-level messages in the channel are ignored. You must reply in a thread on a bot notification.
-- **Issue identifier required** — the parent message must contain an issue identifier (e.g., FUR-141). If it doesn't, the reply is silently dropped.
+- **Thread replies** route to the specific Paperclip issue mentioned in the parent bot notification.
+- **Non-threaded messages** are stored as `GENERAL` and triaged by the CTO agent into new Paperclip issues.
+- **Issue identifier in message** — if a non-threaded message contains an issue identifier (e.g., FUR-141), it routes directly to that issue instead of GENERAL.
 - **Bot messages ignored** — the bot's own messages are filtered out to prevent loops.
 - **Comments appear as "Via Slack"** — thread replies are posted to Paperclip with a "Via Slack" prefix so the agent knows where the message came from.
 
@@ -372,6 +398,7 @@ Wait for the deployment to complete.
 | `app/api/notify-blocked/route.ts` | API endpoint for blocked task alerts (auth via CRON_SECRET) |
 | `app/api/notify-complete/route.ts` | API endpoint for task completion alerts (auth via CRON_SECRET) |
 | `app/api/slack/events/route.ts` | Slack Events API webhook — routes thread replies to Paperclip comments |
+| `app/api/slack/triage/route.ts` | Triage API — GET unprocessed GENERAL messages, POST to mark processed (auth: CRON_SECRET) |
 | `scripts/notify-blocked.ts` | CLI script to send blocked-task notifications locally |
 
 ---

@@ -13,6 +13,7 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `app/api/notify-blocked/route.ts` — POST: sends Slack notification for blocked tasks (auth: CRON_SECRET)
 - `app/api/notify-complete/route.ts` — POST: sends Slack notification for completed tasks (auth: CRON_SECRET)
 - `app/api/slack/events/route.ts` — POST: Slack Events API webhook; routes thread replies back to Paperclip as issue comments
+- `app/api/slack/triage/route.ts` — GET: unprocessed GENERAL (non-threaded) Slack messages; POST: mark message IDs processed (auth: CRON_SECRET)
 - `app/page.tsx` — client-side job listing UI with "New Jobs" / "Applied Jobs" tabs
 - `lib/db.ts` — Neon Postgres helpers
 - `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
