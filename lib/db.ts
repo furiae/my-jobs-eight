@@ -130,3 +130,49 @@ export async function markSlackRepliesProcessed(ids: number[]): Promise<void> {
     WHERE id = ANY(${ids})
   `;
 }
+
+// ── Slack commands ──────────────────────────────────────────────────────────
+
+export interface SlackCommand {
+  id: number;
+  command: string;
+  command_text: string;
+  slack_user_id: string;
+  slack_user_name: string;
+  slack_channel_id: string;
+  response_url: string | null;
+  created_at: string;
+}
+
+export async function insertSlackCommand(cmd: {
+  command: string;
+  commandText: string;
+  slackUserId: string;
+  slackUserName: string;
+  slackChannelId: string;
+  responseUrl: string | null;
+}): Promise<number> {
+  const rows = await sql`
+    INSERT INTO slack_commands (command, command_text, slack_user_id, slack_user_name, slack_channel_id, response_url)
+    VALUES (${cmd.command}, ${cmd.commandText}, ${cmd.slackUserId}, ${cmd.slackUserName}, ${cmd.slackChannelId}, ${cmd.responseUrl})
+    RETURNING id
+  `;
+  return rows[0].id as number;
+}
+
+export async function getUnprocessedSlackCommands(): Promise<SlackCommand[]> {
+  const rows = await sql`
+    SELECT id, command, command_text, slack_user_id, slack_user_name, slack_channel_id, response_url, created_at
+    FROM slack_commands
+    WHERE processed_at IS NULL
+    ORDER BY created_at ASC
+  `;
+  return rows as SlackCommand[];
+}
+
+export async function markSlackCommandProcessed(id: number, paperclipIssueId: string): Promise<void> {
+  await sql`
+    UPDATE slack_commands SET processed_at = NOW(), paperclip_issue_id = ${paperclipIssueId}
+    WHERE id = ${id}
+  `;
+}

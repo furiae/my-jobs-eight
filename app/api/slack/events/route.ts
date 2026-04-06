@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { insertSlackCommand } from "@/lib/db";
 import crypto from "crypto";
 
 // ── Slack request verification ───────────────────────────────────────────────
@@ -218,6 +219,33 @@ export async function POST(req: NextRequest) {
           VALUES (${identifier || "GENERAL"}, ${slackUser}, ${replyText}, ${channel}, ${event.thread_ts || null}, ${event.ts || null})
         `;
         console.log(`[slack-events] Stored message for ${identifier || "GENERAL"} from ${slackUser}`);
+
+        // Check for keyword-based issue creation: #issue <title> or #newissue <title>
+        const issueKeywordMatch = replyText.match(/^#(?:issue|newissue)\s+(.+)/i);
+        if (issueKeywordMatch) {
+          const issueTitle = issueKeywordMatch[1].trim();
+          if (issueTitle) {
+            await insertSlackCommand({
+              command: "#issue",
+              commandText: issueTitle,
+              slackUserId: slackUser,
+              slackUserName: slackUser,
+              slackChannelId: channel,
+              responseUrl: null,
+            });
+
+            if (event.ts) {
+              await addReaction(channel, event.ts, "memo");
+              await postThreadReply(
+                channel,
+                event.ts,
+                `📝 Creating issue: *${issueTitle}*\nI'll post a confirmation with the issue link shortly.`,
+              );
+            }
+            await firePaperclipWebhook();
+            return NextResponse.json({ ok: true });
+          }
+        }
 
         // Acknowledge receipt — add 👀 reaction
         if (event.ts) {
