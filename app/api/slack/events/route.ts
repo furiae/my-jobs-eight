@@ -123,42 +123,43 @@ export async function POST(req: NextRequest) {
   if (payload.type === "event_callback" && payload.event) {
     const event = payload.event;
 
-    // Only process user messages in threads (not bot messages, not subtypes)
+    // Process user messages (not bot messages, not subtypes like joins)
     if (
       event.type === "message" &&
       !event.subtype &&
       !event.bot_id &&
-      event.thread_ts &&
       event.text
     ) {
       const channel = event.channel!;
-      const threadTs = event.thread_ts;
       const replyText = event.text;
       const slackUser = event.user || "unknown";
 
       try {
-        // Fetch the parent message to find the issue identifier
-        const parentMessage = await fetchSlackMessage(channel, threadTs);
-        if (!parentMessage) {
-          console.warn("[slack-events] Could not fetch parent message");
-          return NextResponse.json({ ok: true });
-        }
-
-        const identifier = extractIssueIdentifier(parentMessage);
-        if (!identifier) {
-          console.warn("[slack-events] No issue identifier in parent message");
-          return NextResponse.json({ ok: true });
-        }
-
-        // Store in database for the CTO agent to pick up
         const sql = neon(process.env.DATABASE_URL!);
+        let identifier: string | null = null;
+
+        if (event.thread_ts) {
+          // Thread reply — extract issue identifier from parent message
+          const parentMessage = await fetchSlackMessage(channel, event.thread_ts);
+          if (parentMessage) {
+            identifier = extractIssueIdentifier(parentMessage);
+          }
+        }
+
+        // Also check the message itself for an issue identifier
+        if (!identifier) {
+          const selfMatch = replyText.match(/\b([A-Z]+-\d+)\b/);
+          if (selfMatch) identifier = selfMatch[1];
+        }
+
+        // Store in database — use "GENERAL" for messages without a specific issue
         await sql`
           INSERT INTO slack_replies (issue_identifier, slack_user, reply_text, slack_channel, slack_thread_ts, slack_message_ts)
-          VALUES (${identifier}, ${slackUser}, ${replyText}, ${channel}, ${threadTs}, ${event.ts || null})
+          VALUES (${identifier || "GENERAL"}, ${slackUser}, ${replyText}, ${channel}, ${event.thread_ts || null}, ${event.ts || null})
         `;
-        console.log(`[slack-events] Stored reply for ${identifier} from ${slackUser}`);
+        console.log(`[slack-events] Stored message for ${identifier || "GENERAL"} from ${slackUser}`);
       } catch (err) {
-        console.error("[slack-events] Error processing thread reply:", err);
+        console.error("[slack-events] Error processing message:", err);
       }
     }
   }
