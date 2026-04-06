@@ -54,10 +54,11 @@ API Endpoints
 | `chat:write.public` | Post messages to any public channel without joining (recommended) |
 | `channels:read` | Read basic channel info |
 | `channels:history` | Read message history (optional, for context) |
+| `reactions:write` | Add reactions to messages (acknowledgment) |
 | `im:write` | Send direct messages (optional) |
 | `users:read` | Look up user info (optional) |
 
-**Minimum required:** `chat:write` and `chat:write.public`
+**Minimum required:** `chat:write`, `chat:write.public`, and `reactions:write`
 
 The `chat:write.public` scope is key — it lets the bot post to public channels without needing to be manually invited.
 
@@ -366,6 +367,15 @@ curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
   https://your-app.vercel.app/api/slack/triage \
   -d '{"ids": [1, 2, 3]}'
 ```
+
+### Acknowledgment behavior
+
+When the bot receives a message, it provides immediate feedback:
+
+- **👀 reaction** — added to every stored message (threaded and non-threaded) so you know it was received
+- **Threaded reply** — for non-threaded (GENERAL) messages, the bot posts a brief reply: _"Got it — logged for triage. The CTO agent will pick this up on the next heartbeat."_
+
+This requires the `reactions:write` bot scope (in addition to `chat:write`).
 
 ### Important notes
 

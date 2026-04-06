@@ -11,6 +11,9 @@
  *   4. We store the reply in `slack_replies` table
  *   5. The CTO agent picks up unprocessed replies and posts them to Paperclip
  *
+ * Also acknowledges receipt: adds 👀 reaction to stored messages and posts
+ * a brief threaded reply for non-threaded (GENERAL) messages.
+ *
  * Env vars: SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN, DATABASE_URL
  */
 
@@ -53,6 +56,36 @@ function extractIssueIdentifier(message: SlackMessage): string | null {
   }
 
   return null;
+}
+
+/** Add a reaction to a Slack message. */
+async function addReaction(channel: string, ts: string, emoji: string): Promise<void> {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) return;
+
+  await fetch("https://slack.com/api/reactions.add", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${botToken}`,
+    },
+    body: JSON.stringify({ channel, timestamp: ts, name: emoji }),
+  });
+}
+
+/** Post a threaded reply to a Slack message. */
+async function postThreadReply(channel: string, threadTs: string, text: string): Promise<void> {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) return;
+
+  await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${botToken}`,
+    },
+    body: JSON.stringify({ channel, thread_ts: threadTs, text }),
+  });
 }
 
 /** Fetch a Slack message by channel + timestamp. */
@@ -153,11 +186,26 @@ export async function POST(req: NextRequest) {
         }
 
         // Store in database — use "GENERAL" for messages without a specific issue
+        const isGeneral = !identifier;
         await sql`
           INSERT INTO slack_replies (issue_identifier, slack_user, reply_text, slack_channel, slack_thread_ts, slack_message_ts)
           VALUES (${identifier || "GENERAL"}, ${slackUser}, ${replyText}, ${channel}, ${event.thread_ts || null}, ${event.ts || null})
         `;
         console.log(`[slack-events] Stored message for ${identifier || "GENERAL"} from ${slackUser}`);
+
+        // Acknowledge receipt — add 👀 reaction
+        if (event.ts) {
+          await addReaction(channel, event.ts, "eyes");
+        }
+
+        // For non-threaded messages, post a brief threaded reply
+        if (isGeneral && !event.thread_ts && event.ts) {
+          await postThreadReply(
+            channel,
+            event.ts,
+            "Got it — logged for triage. The CTO agent will pick this up on the next heartbeat.",
+          );
+        }
       } catch (err) {
         console.error("[slack-events] Error processing message:", err);
       }
