@@ -14,7 +14,8 @@
  * Also acknowledges receipt: adds 👀 reaction to stored messages and posts
  * a brief threaded reply for non-threaded (GENERAL) messages.
  *
- * Env vars: SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN, DATABASE_URL
+ * Env vars: SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN, DATABASE_URL,
+ *           PAPERCLIP_WEBHOOK_URL, PAPERCLIP_WEBHOOK_SECRET
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -71,6 +72,31 @@ async function addReaction(channel: string, ts: string, emoji: string): Promise<
     },
     body: JSON.stringify({ channel, timestamp: ts, name: emoji }),
   });
+}
+
+/** Fire the Paperclip webhook to trigger a CTO heartbeat. */
+async function firePaperclipWebhook(): Promise<void> {
+  const webhookUrl = process.env.PAPERCLIP_WEBHOOK_URL;
+  const webhookSecret = process.env.PAPERCLIP_WEBHOOK_SECRET;
+  if (!webhookUrl || !webhookSecret) return;
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${webhookSecret}`,
+      },
+      body: JSON.stringify({ source: "slack_message" }),
+    });
+    if (!res.ok) {
+      console.error(`[slack-events] Webhook fire failed: ${res.status}`);
+    } else {
+      console.log("[slack-events] Paperclip heartbeat triggered via webhook");
+    }
+  } catch (err) {
+    console.error("[slack-events] Webhook fire error:", err);
+  }
 }
 
 /** Post a threaded reply to a Slack message. */
@@ -198,13 +224,14 @@ export async function POST(req: NextRequest) {
           await addReaction(channel, event.ts, "eyes");
         }
 
-        // For non-threaded messages, post a brief threaded reply
+        // For non-threaded messages, post a brief threaded reply and trigger heartbeat
         if (isGeneral && !event.thread_ts && event.ts) {
           await postThreadReply(
             channel,
             event.ts,
-            "Got it — logged for triage. The CTO agent will pick this up on the next heartbeat.",
+            "Got it — logging for triage and waking the CTO agent now.",
           );
+          await firePaperclipWebhook();
         }
       } catch (err) {
         console.error("[slack-events] Error processing message:", err);
