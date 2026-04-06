@@ -277,6 +277,80 @@ View in Paperclip (link)
 
 ---
 
+## Two-Way Communication (Slack → Paperclip)
+
+By default, Slack integration is one-way (bot posts notifications). With the Events API setup below, you can **reply to notifications in Slack threads** and have those replies automatically posted as comments on the corresponding Paperclip issue.
+
+### How it works
+
+1. The bot posts a notification (e.g., "✅ Done: FUR-141")
+2. You reply in the **Slack thread** on that message
+3. Slack sends the reply to your app's `/api/slack/events` endpoint
+4. The endpoint extracts the issue identifier (FUR-141) from the parent message
+5. Your reply is posted as a Paperclip comment on that issue
+6. The CTO agent wakes up and sees your comment on the next heartbeat
+
+### Setup: Enable Event Subscriptions
+
+#### 1. Get your Signing Secret
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) > your app
+2. Click **"Basic Information"** in the sidebar
+3. Scroll to **"App Credentials"**
+4. Copy the **"Signing Secret"**
+
+#### 2. Set the SLACK_SIGNING_SECRET env var
+
+```bash
+# Vercel
+vercel env add SLACK_SIGNING_SECRET
+# Paste the signing secret
+# Select: Production, Preview, Development
+
+# Local
+echo 'SLACK_SIGNING_SECRET=your-signing-secret' >> .env.local
+```
+
+#### 3. Deploy your app first
+
+The Events API requires a live URL to verify. Deploy your app so `/api/slack/events` is accessible:
+
+```bash
+# Push to main (triggers Vercel deployment)
+git push
+```
+
+Wait for the deployment to complete.
+
+#### 4. Enable Event Subscriptions in Slack
+
+1. Go to your Slack app settings > **"Event Subscriptions"**
+2. Toggle **"Enable Events"** to **On**
+3. In **"Request URL"**, enter: `https://your-app.vercel.app/api/slack/events`
+   - Slack will send a verification challenge — the endpoint handles it automatically
+   - You should see a green ✓ "Verified"
+4. Under **"Subscribe to bot events"**, add:
+   - `message.channels` — messages in public channels
+
+5. Click **"Save Changes"**
+6. If prompted, **reinstall the app** to your workspace
+
+#### 5. Test it
+
+1. Find a bot notification in your Slack channel (e.g., "✅ Done: FUR-141")
+2. Reply **in the thread** (click the message > "Reply in thread")
+3. Type a message like "Thanks, looks good!"
+4. Check the Paperclip issue — your reply should appear as a comment
+
+### Important notes
+
+- **Thread replies only** — top-level messages in the channel are ignored. You must reply in a thread on a bot notification.
+- **Issue identifier required** — the parent message must contain an issue identifier (e.g., FUR-141). If it doesn't, the reply is silently dropped.
+- **Bot messages ignored** — the bot's own messages are filtered out to prevent loops.
+- **Comments appear as "Via Slack"** — thread replies are posted to Paperclip with a "Via Slack" prefix so the agent knows where the message came from.
+
+---
+
 ## Environment Variables Summary
 
 | Variable | Where to Set | Required | Purpose |
@@ -284,6 +358,7 @@ View in Paperclip (link)
 | `SLACK_BOT_TOKEN` | Vercel, GitHub Actions, .env.local | Yes | Slack Bot OAuth token (`xoxb-...`) |
 | `SLACK_CHANNEL_ID` | Vercel, GitHub Actions, .env.local | Yes | Target Slack channel ID (`C...`) |
 | `CRON_SECRET` | Vercel, GitHub Actions, .env.local | Yes | Auth for /api/notify-blocked and /api/notify-complete endpoints |
+| `SLACK_SIGNING_SECRET` | Vercel, .env.local | Yes (for two-way) | Verifies incoming Slack events (from App Credentials) |
 | `SLACK_WEBHOOK_URL` | GitHub Actions | No | Legacy fallback (not needed if bot token is set) |
 
 ---
@@ -296,6 +371,7 @@ View in Paperclip (link)
 | `lib/notify.ts` | Auto-apply notifications: `notifySlack()`, `notifyEmail()`, `notifyDiscord()`, `notifyPaperclip()` |
 | `app/api/notify-blocked/route.ts` | API endpoint for blocked task alerts (auth via CRON_SECRET) |
 | `app/api/notify-complete/route.ts` | API endpoint for task completion alerts (auth via CRON_SECRET) |
+| `app/api/slack/events/route.ts` | Slack Events API webhook — routes thread replies to Paperclip comments |
 | `scripts/notify-blocked.ts` | CLI script to send blocked-task notifications locally |
 
 ---
@@ -310,6 +386,8 @@ View in Paperclip (link)
 | `missing_scope` | Add the required scope in Slack App settings > OAuth & Permissions, reinstall app |
 | No messages appearing | Check Vercel runtime logs for `[slack]` errors; verify env vars with `vercel env ls` |
 | GitHub Actions not notifying | Check `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` are set as repo secrets |
+| Thread replies not reaching Paperclip | Verify Event Subscriptions are enabled, Request URL shows ✓, and `SLACK_SIGNING_SECRET` is set on Vercel |
+| "Invalid signature" in Vercel logs | `SLACK_SIGNING_SECRET` doesn't match — re-copy from App Credentials |
 
 ---
 

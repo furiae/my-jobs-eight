@@ -12,6 +12,7 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `app/api/cover-letter/route.ts` — AI cover letter generation
 - `app/api/notify-blocked/route.ts` — POST: sends Slack notification for blocked tasks (auth: CRON_SECRET)
 - `app/api/notify-complete/route.ts` — POST: sends Slack notification for completed tasks (auth: CRON_SECRET)
+- `app/api/slack/events/route.ts` — POST: Slack Events API webhook; routes thread replies back to Paperclip as issue comments
 - `app/page.tsx` — client-side job listing UI with "New Jobs" / "Applied Jobs" tabs
 - `lib/db.ts` — Neon Postgres helpers
 - `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
@@ -32,7 +33,7 @@ Requires `DATABASE_URL` (Neon Postgres). Pull from Vercel:
 vercel env pull .env.local
 ```
 
-Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`. Slack Bot API: `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` (used for both auto-apply notifications and general agent alerts).
+Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`. Slack Bot API: `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` (used for both auto-apply notifications and general agent alerts). Two-way Slack: `SLACK_SIGNING_SECRET` (verifies incoming Slack events).
 
 ## Cron / Automation
 
