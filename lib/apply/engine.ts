@@ -76,17 +76,31 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
   const sql = neon(opts.databaseUrl);
   const limit = opts.limit ?? 10;
 
-  // 1. Fetch un-applied jobs
+  // 1. Fetch un-applied jobs matching target titles (SQL-level filter)
   const rows = await sql`
     SELECT j.id, j.url, j.title, j.company, j.salary, j.source, j.description
     FROM jobs j
     LEFT JOIN applications a ON a.job_id = j.id
     WHERE a.id IS NULL
+      AND LOWER(j.company) NOT LIKE '%dataannotation%'
+      AND (
+        LOWER(j.title) LIKE '%product designer%'
+        OR LOWER(j.title) LIKE '%ux designer%'
+        OR LOWER(j.title) LIKE '%ui designer%'
+        OR LOWER(j.title) LIKE '%ux/ui%'
+        OR LOWER(j.title) LIKE '%ui/ux%'
+        OR LOWER(j.title) LIKE '%web designer%'
+        OR LOWER(j.title) LIKE '%figma%'
+        OR LOWER(j.title) LIKE '%experience designer%'
+        OR LOWER(j.title) LIKE '%interaction designer%'
+        OR LOWER(j.title) LIKE '%visual designer%'
+        OR LOWER(j.title) LIKE '%design lead%'
+      )
     ORDER BY j.scraped_at DESC
-    LIMIT ${limit * 5}
+    LIMIT ${limit * 3}
   `;
 
-  // 2. Filter by title + salary
+  // 2. Refine with JS salary filter, cap at requested limit
   const eligible = rows.filter(
     (r) => titleMatches(r.title) && salaryAboveFloor(r.salary)
   ).slice(0, limit);

@@ -63,6 +63,7 @@ export function titleMatches(title: string): boolean {
     "interaction designer",
     "visual designer",
     "design lead",
+    "ui/ux",
   ].some((keyword) => lower.includes(keyword));
 }
 
