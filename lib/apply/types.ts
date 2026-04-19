@@ -10,6 +10,7 @@ export type AtsPlatform =
   | "workday"
   | "ashby"
   | "generic"
+  | "skyvern"
   | "unknown";
 
 export interface PhaseTimeouts {

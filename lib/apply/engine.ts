@@ -15,6 +15,7 @@ import { applyWorkday } from "./ats/workday";
 import { applyAshby } from "./ats/ashby";
 import { applyGeneric } from "./ats/generic";
 import { generateCoverLetter, deleteTempFile } from "./cover-letter";
+import { applySkyvern } from "./ats/skyvern";
 import type { AtsPlatform, ApplicationRecord, PhaseTimeouts } from "./types";
 
 const APPLY_TIMEOUT_MS = 120_000; // max time per application
@@ -204,6 +205,26 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
           console.log(
             `[apply] ${job.company} — attempt ${attempt}/${MAX_RETRIES} failed (${result.reason}), giving up`
           );
+        }
+      }
+
+      // If Playwright failed, try Skyvern as fallback for complex forms
+      if (!result.success && process.env.SKYVERN_API_KEY && record.applyUrl) {
+        const skyvernEligible =
+          result.reason === "captcha_detected" ||
+          result.reason === "no_submit_button" ||
+          result.reason === "no_form_found" ||
+          result.reason === "form_validation";
+        if (skyvernEligible) {
+          console.log(`[apply] ${job.company} — Playwright failed (${result.reason}), trying Skyvern...`);
+          await context.close();
+          const skyvernResult = await applySkyvern(record.applyUrl, coverLetter.text);
+          if (skyvernResult.success) {
+            result = skyvernResult;
+            record.atsPlatform = "skyvern";
+          } else {
+            console.log(`[apply] ${job.company} — Skyvern also failed: ${skyvernResult.reason}`);
+          }
         }
       }
 
