@@ -35,7 +35,7 @@ Requires `DATABASE_URL` (Neon Postgres). Pull from Vercel:
 vercel env pull .env.local
 ```
 
-Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`. Slack Bot API: `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` (used for both auto-apply notifications and general agent alerts). Two-way Slack: `SLACK_SIGNING_SECRET` (verifies incoming Slack events). Paperclip webhook: `PAPERCLIP_WEBHOOK_URL`, `PAPERCLIP_WEBHOOK_SECRET` (fires CTO heartbeat on Slack messages).
+Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, `NOTIFICATION_EMAIL`, `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, `LINKEDIN_SESSION_COOKIE` (LinkedIn `li_at` cookie for authenticated apply flows — obtain from browser DevTools). Slack Bot API: `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` (used for both auto-apply notifications and general agent alerts). Two-way Slack: `SLACK_SIGNING_SECRET` (verifies incoming Slack events). Paperclip webhook: `PAPERCLIP_WEBHOOK_URL`, `PAPERCLIP_WEBHOOK_SECRET` (fires CTO heartbeat on Slack messages).
 
 ## Cron / Automation
 

@@ -14,8 +14,16 @@ import { applyLever } from "./ats/lever";
 import { applyWorkday } from "./ats/workday";
 import { applyAshby } from "./ats/ashby";
 import { applyGeneric } from "./ats/generic";
+import { applyLinkedIn } from "./ats/linkedin";
 import { generateCoverLetter, deleteTempFile } from "./cover-letter";
 import { applySkyvern } from "./ats/skyvern";
+import {
+  getLinkedInCookie,
+  injectLinkedInCookies,
+  isLinkedInUrl,
+  isLinkedInJobUrl,
+  isLinkedInLoginPage,
+} from "./linkedin-auth";
 import type { AtsPlatform, ApplicationRecord, PhaseTimeouts } from "./types";
 
 const APPLY_TIMEOUT_MS = 120_000; // max time per application
@@ -54,6 +62,9 @@ function isNonRetryable(reason: string): boolean {
     "no_form_found",
     "no_apply_link",
     "form_validation",
+    "linkedin_session_expired",
+    "linkedin_external_apply",
+    "linkedin_no_session_cookie",
   ];
   return permanent.some((t) => reason.includes(t));
 }
@@ -129,6 +140,7 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
       company: job.company,
       status: "pending",
     };
+    const jobIsLinkedIn = isLinkedInUrl(job.url);
 
     try {
       // Generate AI-customized cover letter for this job
@@ -145,29 +157,69 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
         userAgent:
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       });
+
+      // Inject LinkedIn session cookie if the job URL is on LinkedIn
+      if (jobIsLinkedIn) {
+        const injected = await injectLinkedInCookies(context);
+        if (!injected) {
+          record.status = "manual_required";
+          record.errorMessage = "linkedin_no_session_cookie";
+          summary.manual++;
+          await context.close();
+          deleteTempFile(coverLetter.tempFilePath);
+          await upsertApplication(sql, record);
+          summary.records.push(record);
+          console.log(`[apply] ${job.company} — skipped LinkedIn job (LINKEDIN_SESSION_COOKIE not set)`);
+          continue;
+        }
+        // Human-like delay before navigating
+        await sleep(1000 + Math.random() * 2000);
+      }
+
       const page = await context.newPage();
 
       // Navigate to job page to find "Apply" link
       await page.goto(job.url, { waitUntil: "networkidle", timeout: PHASE_TIMEOUTS.pageLoadMs });
 
-      // Find apply link
-      const applyUrl = await findApplyUrl(page, job.url);
-
-      if (!applyUrl) {
+      // Check for LinkedIn auth wall (stale cookie)
+      if (jobIsLinkedIn && isLinkedInLoginPage(page.url())) {
         record.status = "manual_required";
-        record.errorMessage = "no_apply_link";
+        record.errorMessage = "linkedin_session_expired";
         summary.manual++;
         await context.close();
         deleteTempFile(coverLetter.tempFilePath);
         await upsertApplication(sql, record);
         summary.records.push(record);
+        console.log(`[apply] ${job.company} — LinkedIn session expired, cookie needs refresh`);
         continue;
       }
 
-      record.applyUrl = applyUrl;
+      // For LinkedIn jobs, the job page itself is the apply page
+      let applyUrl: string | null;
+      let platform: AtsPlatform;
 
-      // Detect ATS platform
-      const platform = detectAts(applyUrl);
+      if (jobIsLinkedIn && isLinkedInJobUrl(job.url)) {
+        applyUrl = job.url;
+        platform = "linkedin";
+      } else {
+        // Find apply link on non-LinkedIn pages
+        applyUrl = await findApplyUrl(page, job.url);
+
+        if (!applyUrl) {
+          record.status = "manual_required";
+          record.errorMessage = "no_apply_link";
+          summary.manual++;
+          await context.close();
+          deleteTempFile(coverLetter.tempFilePath);
+          await upsertApplication(sql, record);
+          summary.records.push(record);
+          continue;
+        }
+
+        platform = detectAts(applyUrl);
+      }
+
+      record.applyUrl = applyUrl;
       record.atsPlatform = platform;
 
       // Apply with timeout + retry logic
@@ -206,6 +258,25 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
             `[apply] ${job.company} — attempt ${attempt}/${MAX_RETRIES} failed (${result.reason}), giving up`
           );
         }
+      }
+
+      // If LinkedIn returned an external apply URL, re-dispatch to the correct ATS
+      if (
+        !result.success &&
+        result.reason === "linkedin_external_apply" &&
+        result.finalUrl
+      ) {
+        console.log(`[apply] ${job.company} — LinkedIn redirected to external ATS: ${result.finalUrl}`);
+        const extPlatform = detectAts(result.finalUrl);
+        record.applyUrl = result.finalUrl;
+        record.atsPlatform = extPlatform;
+
+        const extPage = await context.newPage();
+        result = await Promise.race([
+          dispatchApply(extPage, result.finalUrl, extPlatform, coverLetter.tempFilePath),
+          timeout(APPLY_TIMEOUT_MS),
+        ]);
+        await extPage.close().catch(() => {});
       }
 
       // If Playwright failed, try Skyvern as fallback for complex forms
@@ -262,8 +333,9 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
     await upsertApplication(sql, record);
     summary.records.push(record);
 
-    // Polite delay between applications
-    await sleep(2000);
+    // Polite delay between applications — longer for LinkedIn to avoid rate limits
+    const delayMs = jobIsLinkedIn ? 5000 + Math.random() * 5000 : 2000;
+    await sleep(delayMs);
   }
 
   await browser.close();
@@ -328,6 +400,7 @@ function detectAts(url: string): AtsPlatform {
   if (url.includes("lever.co")) return "lever";
   if (url.includes("workday.com") || url.includes("myworkdayjobs.com")) return "workday";
   if (url.includes("ashbyhq.com")) return "ashby";
+  if (isLinkedInUrl(url)) return "linkedin";
   return "generic";
 }
 
@@ -346,6 +419,8 @@ async function dispatchApply(
       return applyWorkday(page, url, coverLetterPath, PHASE_TIMEOUTS);
     case "ashby":
       return applyAshby(page, url, coverLetterPath, PHASE_TIMEOUTS);
+    case "linkedin":
+      return applyLinkedIn(page, url, coverLetterPath, PHASE_TIMEOUTS);
     default:
       return applyGeneric(page, url, coverLetterPath, PHASE_TIMEOUTS);
   }

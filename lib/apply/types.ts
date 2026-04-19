@@ -9,6 +9,7 @@ export type AtsPlatform =
   | "lever"
   | "workday"
   | "ashby"
+  | "linkedin"
   | "generic"
   | "skyvern"
   | "unknown";

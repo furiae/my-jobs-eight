@@ -27,6 +27,7 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+      LINKEDIN_SESSION_COOKIE: ${{ secrets.LINKEDIN_SESSION_COOKIE }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
