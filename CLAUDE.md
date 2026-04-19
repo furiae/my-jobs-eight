@@ -53,6 +53,16 @@ Other env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`. Optional: `RESEND_API_KEY`, 
 6. Records result in `applications` table and marks `jobs.applied_at`
 7. Applied jobs appear in the "Applied Jobs" tab in the web UI with green checkmark and timestamp
 
+## Skyvern Integration (AI Browser Automation)
+
+- `lib/apply/ats/skyvern.ts` — Skyvern adapter for complex ATS forms
+- Self-hosted Skyvern runs locally via pip (`/Users/chris/skyvern-env/`) with Docker PostgreSQL container (`skyvern-pg`)
+- Skyvern API: `http://localhost:8000`, API key in `/Users/chris/skyvern/.env`
+- Engine fallback: Playwright tries first → if captcha/no_submit_button/no_form_found → Skyvern retries with AI
+- Env vars: `SKYVERN_API_KEY`, `SKYVERN_BASE_URL` (default: http://localhost:8000)
+- Start Skyvern: `source /Users/chris/skyvern-env/bin/activate && cd /Users/chris/skyvern && skyvern run server`
+- Start Skyvern DB: `docker start skyvern-pg` (or via Docker Desktop)
+
 ## Styling
 
 - Tailwind CSS v3.4 with PostCSS
