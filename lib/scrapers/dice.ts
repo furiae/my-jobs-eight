@@ -20,7 +20,11 @@ export async function scrapeDice(): Promise<ScrapedJob[]> {
           `https://www.dice.com/jobs?q=${encoded}&filters.isRemote=true`,
           { waitUntil: "domcontentloaded", timeout: 20000 }
         );
-        await page.waitForTimeout(5000);
+        // Wait for React to render job cards instead of fixed delay
+        await page
+          .waitForSelector('a[href*="/job-detail/"]', { timeout: 15000 })
+          .catch(() => {});
+        await page.waitForTimeout(1000); // brief settle after initial render
 
         return page.evaluate(() => {
           // Dice uses regular anchor tags with /job-detail/ URLs

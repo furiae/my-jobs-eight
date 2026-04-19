@@ -1,4 +1,5 @@
 import type { ScrapedJob } from "./remoteok";
+import { withPage } from "./browser";
 
 const DESIGN_KEYWORDS = [
   "designer",
@@ -18,76 +19,118 @@ function isDesignJob(title: string): boolean {
   return DESIGN_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-interface YCJob {
-  id: number;
-  company_name: string;
-  title: string;
-  description: string;
-  url: string;
-  remote: boolean;
-  created_at: string;
-  salary_min?: number;
-  salary_max?: number;
-}
-
 export async function scrapeYCombinator(): Promise<ScrapedJob[]> {
   const results: ScrapedJob[] = [];
   const seen = new Set<string>();
 
   try {
-    // Algolia-powered search used by workatastartup.com
-    const res = await fetch(
-      "https://45bwzj1sgc-dsn.algolia.net/1/indexes/WAtS_jobs/query",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Algolia-Application-Id": "45BWZJ1SGC",
-          "X-Algolia-API-Key": "MjBjYjRiMzY0NzdhZWY0NjExY2NhZjYxMGIxYjc2MTAwNWFkNTkwNTc4NjgxYjU0YzFhYTY2ZGQ5OGY5NDMzZnJlc3RyaWN0SW5kaWNlcz0lNUIlMjJXQXRTX2pvYnMlMjIlMkMlMjJXQXRTX2pvYnNfcHJvZHVjdGlvbiUyMiU1RCZ0YWdGaWx0ZXJzPSU1QiUyMmhpcmluZ19ub3RlcyUyMiU1RCZhbmFseXRpY3NUYWdzPSU1QiUyMndhcy1qb2JzLXF1ZXJ5JTIyJTVE",
-        },
-        body: JSON.stringify({
-          query: "designer",
-          hitsPerPage: 50,
-          facetFilters: [["remote:true"]],
-        }),
+    const jobs = await withPage(async (page) => {
+      await page.goto(
+        "https://www.workatastartup.com/jobs/l/designer?remote=true",
+        { waitUntil: "networkidle", timeout: 30000 }
+      );
+      await page.waitForTimeout(3000);
+
+      // Scroll to load more jobs
+      for (let i = 0; i < 3; i++) {
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+        await page.waitForTimeout(1500);
       }
-    );
 
-    if (!res.ok) return results;
+      return page.evaluate(() => {
+        const jobLinks = document.querySelectorAll<HTMLAnchorElement>(
+          'a[href^="/jobs/"][data-jobid]'
+        );
+        const items: {
+          title: string;
+          company: string;
+          url: string;
+          salary: string | null;
+          location: string;
+          posted: string | null;
+        }[] = [];
+        const seenIds = new Set<string>();
 
-    const data = await res.json();
-    const hits: YCJob[] = data.hits ?? [];
+        for (const a of Array.from(jobLinks)) {
+          const jobId = a.getAttribute("data-jobid");
+          if (!jobId || seenIds.has(jobId)) continue;
+          seenIds.add(jobId);
 
-    for (const hit of hits) {
-      if (!isDesignJob(hit.title ?? "")) continue;
+          const title = a.textContent?.trim() || "";
+          const url = `https://www.workatastartup.com/jobs/${jobId}`;
 
-      const url =
-        hit.url ||
-        `https://www.workatastartup.com/jobs/${hit.id}`;
+          // Find the parent card — the grow div contains both company and job details
+          const growDiv = a.closest("div.grow, div[class*='grow']");
+          const section = growDiv?.closest("section") || a.closest("section");
+          let company = "";
+          let salary: string | null = null;
+          let location = "Remote";
+          let posted: string | null = null;
 
-      if (seen.has(url)) continue;
-      seen.add(url);
+          // Company name is in a bold span inside a company link in the grow div
+          const companyContainer = growDiv || section;
+          if (companyContainer) {
+            const companyLink = companyContainer.querySelector<HTMLAnchorElement>(
+              'a[href*="/companies/"]'
+            );
+            if (companyLink) {
+              const bold = companyLink.querySelector(".font-bold");
+              company = bold?.textContent?.trim().replace(/\s*\(.*\)$/, "") || "";
+            }
 
-      let salary: string | null = null;
-      if (hit.salary_min && hit.salary_max) {
-        salary = `USD ${hit.salary_min}-${hit.salary_max}`;
-      }
+            // Job details text
+            const detailsEl = a.closest("div")?.querySelector(".job-details");
+            if (detailsEl) {
+              const detailText = detailsEl.textContent || "";
+              // Extract location
+              const parts = detailText.split(/[•·]/);
+              if (parts.length > 1) {
+                location = parts[1]?.trim() || "Remote";
+              }
+            }
+
+            // Salary — look for dollar amounts in the container
+            const containerText = companyContainer.textContent || "";
+            const salaryMatch = containerText.match(
+              /\$[\d,]+k?\s*[-–]\s*\$[\d,]+k?/
+            );
+            if (salaryMatch) {
+              salary = salaryMatch[0];
+            }
+
+            // Posted date
+            const dateSpan = companyContainer.querySelector(
+              ".text-gray-300, .text-gray-400"
+            );
+            if (dateSpan) {
+              const dateText = dateSpan.textContent?.trim();
+              if (dateText?.includes("ago")) {
+                posted = dateText.replace(/[()]/g, "");
+              }
+            }
+          }
+
+          items.push({ title, company, url, salary, location, posted });
+        }
+
+        return items;
+      });
+    });
+
+    for (const job of jobs) {
+      if (!isDesignJob(job.title)) continue;
+      if (seen.has(job.url)) continue;
+      seen.add(job.url);
 
       results.push({
-        url,
-        title: hit.title,
-        company: hit.company_name ?? "",
-        salary,
-        location: "Remote",
-        description: (hit.description ?? "")
-          .replace(/<[^>]*>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 500),
+        url: job.url,
+        title: job.title,
+        company: job.company,
+        salary: job.salary,
+        location: job.location,
+        description: "",
         source: "Y Combinator",
-        posted_at: hit.created_at
-          ? new Date(hit.created_at).toISOString()
-          : null,
+        posted_at: null,
       });
     }
   } catch {
