@@ -98,7 +98,7 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
         OR LOWER(j.title) LIKE '%design lead%'
       )
     ORDER BY j.scraped_at DESC
-    LIMIT ${limit * 3}
+    LIMIT ${limit * 5}
   `;
 
   // 2. Refine with JS salary filter, cap at requested limit
