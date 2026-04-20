@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { scrapeRemoteOK } from "@/lib/scrapers/remoteok";
 import { scrapeWeWorkRemotely } from "@/lib/scrapers/weworkremotely";
 import { scrapeRemotive } from "@/lib/scrapers/remotive";
 import { scrapeUIUXJobsBoard } from "@/lib/scrapers/uiuxjobsboard";
@@ -32,6 +31,7 @@ import { scrapeDesignJobs } from "@/lib/scrapers/designjobs";
 import { scrapeToptal } from "@/lib/scrapers/toptal";
 import { scrapeGreenhouseBoards } from "@/lib/scrapers/greenhouse-boards";
 import { scrapeLeverBoards } from "@/lib/scrapers/lever-boards";
+import { scrapeUxcel } from "@/lib/scrapers/uxcel";
 import { upsertJobs } from "@/lib/db";
 import { closeBrowser } from "@/lib/scrapers/browser";
 
@@ -39,8 +39,7 @@ export const maxDuration = 120;
 
 export async function GET() {
   try {
-    const [remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards] = await Promise.allSettled([
-      scrapeRemoteOK(),
+    const [wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards, leverBoards, uxcel] = await Promise.allSettled([
       scrapeWeWorkRemotely(),
       scrapeRemotive(),
       scrapeUIUXJobsBoard(),
@@ -73,9 +72,10 @@ export async function GET() {
       scrapeToptal(),
       scrapeGreenhouseBoards(),
       scrapeLeverBoards(),
+      scrapeUxcel(),
     ]);
 
-    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards, leverBoards };
+    const results = { wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards, leverBoards, uxcel };
 
     const allJobs = Object.values(results).flatMap(
       (r) => (r.status === "fulfilled" ? r.value : [])

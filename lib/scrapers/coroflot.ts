@@ -1,4 +1,4 @@
-import type { ScrapedJob } from "./remoteok";
+import type { ScrapedJob } from "./types";
 import { withPage } from "./browser";
 
 export async function scrapeCoroflot(): Promise<ScrapedJob[]> {

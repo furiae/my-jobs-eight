@@ -8,7 +8,7 @@
  * Structured JSON — no browser needed, no auth required.
  */
 
-import type { ScrapedJob } from "./remoteok";
+import type { ScrapedJob } from "./types";
 
 // Companies known to use Lever and hire product/UX designers
 const LEVER_COMPANIES = [

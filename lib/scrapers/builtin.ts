@@ -1,4 +1,4 @@
-import type { ScrapedJob } from "./remoteok";
+import type { ScrapedJob } from "./types";
 
 const DESIGN_KEYWORDS = [
   "designer",

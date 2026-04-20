@@ -1,4 +1,4 @@
-import type { ScrapedJob } from "./remoteok";
+import type { ScrapedJob } from "./types";
 
 const DESIGN_CATEGORIES = [
   "https://weworkremotely.com/categories/remote-design-jobs.rss",

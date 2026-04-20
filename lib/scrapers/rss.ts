@@ -1,4 +1,4 @@
-import type { ScrapedJob } from "./remoteok";
+import type { ScrapedJob } from "./types";
 
 // --- Generic RSS/Atom parser ---
 
@@ -129,11 +129,6 @@ export const RSS_FEEDS: RSSFeedConfig[] = [
     url: "https://remotive.com/remote-jobs/design/feed",
     source: "Remotive (RSS)",
     filter: () => true,
-  },
-  {
-    url: "https://remoteok.com/rss",
-    source: "RemoteOK (RSS)",
-    filter: isDesignJob,
   },
   {
     url: "https://jobicy.com/feed/newjobs",
