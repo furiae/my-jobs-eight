@@ -66,7 +66,6 @@ const DESIGN_KEYWORDS = [
   "visual designer",
   "interaction designer",
   "experience designer",
-  "figma",
   "web designer",
   "brand designer",
   "creative director",

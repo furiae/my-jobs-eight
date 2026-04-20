@@ -17,7 +17,8 @@ Remote design job board with automated application engine. Scrapes 10 job boards
 - `app/api/slack/triage/route.ts` — GET: unprocessed GENERAL (non-threaded) Slack messages; POST: mark message IDs processed (auth: CRON_SECRET)
 - `app/page.tsx` — client-side job listing UI with "New Jobs" / "Applied Jobs" tabs
 - `lib/db.ts` — Neon Postgres helpers
-- `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs)
+- `lib/scrapers/` — per-board scraper modules (WWR, RemoteOK, Remotive, LinkedIn, Indeed, Dice, Monster, FlexJobs, UIUXJobsBoard, RemoteJobs, Greenhouse Boards)
+- `lib/scrapers/greenhouse-boards.ts` — Greenhouse public JSON API scraper for 40 top tech companies (Figma, Stripe, Discord, etc). No browser needed. Highest-yield scraper for auto-apply pipeline.
 - `lib/apply/engine.ts` — auto-apply engine (fetches un-applied jobs, filters, runs Playwright)
 - `lib/apply/ats/` — ATS-specific form fillers (Greenhouse, Lever, Workday, Ashby, generic)
 - `lib/apply/profile.ts` — Chris's profile data for form filling

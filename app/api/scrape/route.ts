@@ -31,6 +31,7 @@ import { scrapeNodesk } from "@/lib/scrapers/nodesk";
 import { scrapeDesignJobs } from "@/lib/scrapers/designjobs";
 import { scrapeToptal } from "@/lib/scrapers/toptal";
 import { scrapeGreenhouseBoards } from "@/lib/scrapers/greenhouse-boards";
+import { scrapeLeverBoards } from "@/lib/scrapers/lever-boards";
 import { upsertJobs } from "@/lib/db";
 import { closeBrowser } from "@/lib/scrapers/browser";
 
@@ -71,9 +72,10 @@ export async function GET() {
       scrapeDesignJobs(),
       scrapeToptal(),
       scrapeGreenhouseBoards(),
+      scrapeLeverBoards(),
     ]);
 
-    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards };
+    const results = { remoteok, wwr, remotive, uiux, remotejobs, linkedin, indeed, dice, monster, flexjobs, jobicy, himalayas, authenticjobs, workingnomads, rssFeeds, reddit, dribbble, coroflot, aiga, krop, behance, glassdoor, wellfound, justremote, powertofly, builtin, ycombinator, remoteio, nodesk, designjobs, toptal, greenhouseBoards, leverBoards };
 
     const allJobs = Object.values(results).flatMap(
       (r) => (r.status === "fulfilled" ? r.value : [])
