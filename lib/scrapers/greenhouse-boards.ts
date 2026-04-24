@@ -52,6 +52,20 @@ const GREENHOUSE_COMPANIES = [
   { slug: "deel", name: "Deel" },
   { slug: "rippling", name: "Rippling" },
   { slug: "calendly", name: "Calendly" },
+  { slug: "twilio", name: "Twilio" },
+  { slug: "dropbox", name: "Dropbox" },
+  { slug: "intercom", name: "Intercom" },
+  { slug: "klaviyo", name: "Klaviyo" },
+  { slug: "typeform", name: "Typeform" },
+  { slug: "mongodb", name: "MongoDB" },
+  { slug: "databricks", name: "Databricks" },
+  { slug: "toast", name: "Toast" },
+  { slug: "asana", name: "Asana" },
+  { slug: "pandadoc", name: "PandaDoc" },
+  { slug: "smartsheet", name: "Smartsheet" },
+  { slug: "contentful", name: "Contentful" },
+  { slug: "amplitude", name: "Amplitude" },
+  { slug: "mixpanel", name: "Mixpanel" },
 ];
 
 const DESIGN_KEYWORDS = [

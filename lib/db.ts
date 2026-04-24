@@ -21,25 +21,40 @@ export interface Job {
   apply_url: string | null;
 }
 
+export type SortField = "scraped_at" | "posted_at";
+export type SortDir = "desc" | "asc";
+
 export async function getJobs(
   limit = 50,
   offset = 0,
-  source?: string
+  source?: string,
+  sortField: SortField = "scraped_at",
+  sortDir: SortDir = "desc"
 ): Promise<{ jobs: Job[]; total: number }> {
+  // Build ORDER BY — posted_at can be null so nulls go last for desc, first for asc
+  const orderClause =
+    sortField === "posted_at"
+      ? sortDir === "desc"
+        ? sql`ORDER BY j.posted_at DESC NULLS LAST`
+        : sql`ORDER BY j.posted_at ASC NULLS LAST`
+      : sortDir === "desc"
+        ? sql`ORDER BY j.scraped_at DESC`
+        : sql`ORDER BY j.scraped_at ASC`;
+
   const rows = source
     ? await sql`
         SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
         FROM jobs j
         LEFT JOIN applications a ON a.job_id = j.id
         WHERE j.source = ${source}
-        ORDER BY j.scraped_at DESC
+        ${orderClause}
         LIMIT ${limit} OFFSET ${offset}
       `
     : await sql`
         SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
         FROM jobs j
         LEFT JOIN applications a ON a.job_id = j.id
-        ORDER BY j.scraped_at DESC
+        ${orderClause}
         LIMIT ${limit} OFFSET ${offset}
       `;
 
@@ -51,6 +66,16 @@ export async function getJobs(
     jobs: rows as Job[],
     total: Number(countRows[0].count),
   };
+}
+
+export async function getJobSources(): Promise<Array<{ source: string; count: number }>> {
+  const rows = await sql`
+    SELECT source, COUNT(*) as count
+    FROM jobs
+    GROUP BY source
+    ORDER BY count DESC
+  `;
+  return rows.map((r) => ({ source: r.source as string, count: Number(r.count) }));
 }
 
 export async function upsertJobs(jobs: Omit<Job, "id" | "scraped_at" | "applied_at" | "application_status" | "ats_platform" | "error_message" | "cover_letter_text" | "apply_url">[]) {

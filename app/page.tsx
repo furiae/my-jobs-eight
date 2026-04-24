@@ -22,8 +22,15 @@ interface Job {
 }
 
 type Tab = "new" | "applied";
+type SortField = "scraped_at" | "posted_at";
+type SortDir = "desc" | "asc";
 
-const SOURCES = ["We Work Remotely", "Remote OK", "Remotive", "UIUXJobsBoard", "RemoteJobs.io", "LinkedIn", "Indeed", "Dice", "Monster", "FlexJobs"];
+const SORT_OPTIONS: Array<{ field: SortField; dir: SortDir; label: string }> = [
+  { field: "scraped_at", dir: "desc", label: "Newest scraped" },
+  { field: "posted_at", dir: "desc", label: "Posted recently" },
+  { field: "posted_at", dir: "asc", label: "Posted oldest" },
+  { field: "scraped_at", dir: "asc", label: "Oldest scraped" },
+];
 
 const STATUS_BADGES: Record<string, { label: string; bg: string; text: string }> = {
   applied: { label: "Applied", bg: "bg-green-900/50", text: "text-green-400" },
@@ -43,11 +50,26 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<Tab>("new");
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const [expandedCoverLetter, setExpandedCoverLetter] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("scraped_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [availableSources, setAvailableSources] = useState<Array<{ source: string; count: number }>>([]);
+
+  // Fetch available sources once on mount
+  useEffect(() => {
+    fetch("/api/jobs/sources")
+      .then((r) => r.json())
+      .then((data) => setAvailableSources(data.sources || []))
+      .catch(() => {});
+  }, []);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "200" });
+      const params = new URLSearchParams({
+        limit: "200",
+        sortField,
+        sortDir,
+      });
       if (source) params.set("source", source);
       const res = await fetch(`/api/jobs?${params}`);
       const data = await res.json();
@@ -56,7 +78,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [source]);
+  }, [source, sortField, sortDir]);
 
   useEffect(() => {
     fetchJobs();
@@ -67,6 +89,11 @@ export default function Page() {
     try {
       await fetch("/api/scrape");
       await fetchJobs();
+      // Refresh sources after scrape
+      fetch("/api/jobs/sources")
+        .then((r) => r.json())
+        .then((data) => setAvailableSources(data.sources || []))
+        .catch(() => {});
     } finally {
       setScraping(false);
     }
@@ -153,6 +180,17 @@ export default function Page() {
     }
   };
 
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const idx = Number(e.target.value);
+    const opt = SORT_OPTIONS[idx];
+    setSortField(opt.field);
+    setSortDir(opt.dir);
+  };
+
+  const currentSortIdx = SORT_OPTIONS.findIndex(
+    (o) => o.field === sortField && o.dir === sortDir
+  );
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800">
@@ -216,7 +254,7 @@ export default function Page() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6">
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <input
             type="text"
             placeholder="Filter by title or company…"
@@ -224,33 +262,48 @@ export default function Page() {
             onChange={(e) => setFilter(e.target.value)}
             className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
           />
+          <select
+            value={currentSortIdx === -1 ? 0 : currentSortIdx}
+            onChange={handleSortChange}
+            className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            {SORT_OPTIONS.map((opt, i) => (
+              <option key={i} value={i}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="flex gap-2 flex-wrap mb-4">
-          <button
-            onClick={() => setSource(null)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              source === null
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-            }`}
-          >
-            All Sources
-          </button>
-          {SOURCES.map((s) => (
+        {/* Dynamic source filter buttons — only show sources with jobs */}
+        {availableSources.length > 0 && (
+          <div className="flex gap-2 flex-wrap mb-4">
             <button
-              key={s}
-              onClick={() => setSource(s)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                source === s
+              onClick={() => setSource(null)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                source === null
                   ? "bg-blue-600 text-white"
                   : "bg-gray-800 text-gray-300 hover:bg-gray-700"
               }`}
             >
-              {s}
+              All
             </button>
-          ))}
-        </div>
+            {availableSources.map((s) => (
+              <button
+                key={s.source}
+                onClick={() => setSource(source === s.source ? null : s.source)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  source === s.source
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                }`}
+              >
+                {s.source}
+                <span className="ml-1.5 opacity-50">{s.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <p className="text-sm text-gray-500 mb-4">
           {loading ? "Loading…" : `${filtered.length} listings`}
