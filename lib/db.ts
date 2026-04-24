@@ -31,36 +31,26 @@ export async function getJobs(
   sortField: SortField = "scraped_at",
   sortDir: SortDir = "desc"
 ): Promise<{ jobs: Job[]; total: number }> {
-  // Build ORDER BY — posted_at can be null so nulls go last for desc, first for asc
-  const orderClause =
-    sortField === "posted_at"
-      ? sortDir === "desc"
-        ? sql`ORDER BY j.posted_at DESC NULLS LAST`
-        : sql`ORDER BY j.posted_at ASC NULLS LAST`
-      : sortDir === "desc"
-        ? sql`ORDER BY j.scraped_at DESC`
-        : sql`ORDER BY j.scraped_at ASC`;
+  // sortField and sortDir are validated enum types — safe to interpolate as raw SQL.
+  // Neon's sql tagged template doesn't support composable fragments (nested sql calls
+  // are treated as parameter bindings, not inlined SQL), so we use the sql(string, params)
+  // call signature instead.
+  const nulls = sortField === "posted_at" ? " NULLS LAST" : "";
+  const orderBy = `ORDER BY j.${sortField} ${sortDir.toUpperCase()}${nulls}`;
+
+  const base = `
+    SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
+    FROM jobs j
+    LEFT JOIN applications a ON a.job_id = j.id
+  `;
 
   const rows = source
-    ? await sql`
-        SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
-        FROM jobs j
-        LEFT JOIN applications a ON a.job_id = j.id
-        WHERE j.source = ${source}
-        ${orderClause}
-        LIMIT ${limit} OFFSET ${offset}
-      `
-    : await sql`
-        SELECT j.*, a.status as application_status, a.ats_platform, a.error_message, a.cover_letter_text, a.apply_url
-        FROM jobs j
-        LEFT JOIN applications a ON a.job_id = j.id
-        ${orderClause}
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+    ? await sql(`${base} WHERE j.source = $1 ${orderBy} LIMIT $2 OFFSET $3`, [source, limit, offset])
+    : await sql(`${base} ${orderBy} LIMIT $1 OFFSET $2`, [limit, offset]);
 
   const countRows = source
-    ? await sql`SELECT COUNT(*) as count FROM jobs WHERE source = ${source}`
-    : await sql`SELECT COUNT(*) as count FROM jobs`;
+    ? await sql("SELECT COUNT(*) as count FROM jobs WHERE source = $1", [source])
+    : await sql("SELECT COUNT(*) as count FROM jobs");
 
   return {
     jobs: rows as Job[],
