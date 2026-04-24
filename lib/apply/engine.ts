@@ -219,7 +219,7 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
         platform = detectAts(applyUrl);
       }
 
-      record.applyUrl = applyUrl;
+      record.applyUrl = applyUrl ?? undefined;
       record.atsPlatform = platform;
 
       // Apply with timeout + retry logic
@@ -228,7 +228,7 @@ export async function runAutoApply(opts: RunOptions): Promise<RunSummary> {
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         const applyPage = await context.newPage();
         result = await Promise.race([
-          dispatchApply(applyPage, applyUrl, platform, coverLetter.tempFilePath),
+          dispatchApply(applyPage, applyUrl!, platform, coverLetter.tempFilePath),
           timeout(APPLY_TIMEOUT_MS),
         ]);
         await applyPage.close().catch(() => {});
