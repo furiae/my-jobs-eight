@@ -1,5 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import { Lead } from "@/lib/db";
+import { generatePresentationPDF } from "@/lib/pdf-generator";
+import { generateEmailTemplate } from "@/lib/email-templates";
 
 interface BookingResult {
   email_sent: boolean;
@@ -22,25 +24,24 @@ export async function runBookingAgent(
     // Step 1: Generate personalized email content using Claude
     const emailContent = await generateEmailContent(lead, analysisResult, apiKey);
 
-    // Step 2: Send presentation via email (using Resend)
-    const emailSent = await sendPresentationEmail(lead, presentationUrl, emailContent);
+    // Step 2: Generate PDF buffer for attachment
+    const pdfBuffer = await generatePresentationPDF(lead, analysisResult as any);
+
+    // Step 3: Send presentation via email (using Resend) with PDF attachment
+    const emailSent = await sendPresentationEmail(lead, pdfBuffer, emailContent);
 
     if (!emailSent) {
       throw new Error("Failed to send presentation email");
     }
 
-    // Step 3: Generate Calendly link (or booking URL)
+    // Step 4: Generate Calendly link (or booking URL)
     const calendlyLink = generateCalendlyLink(lead);
 
-    // Step 4: Log follow-up in system
+    // Step 5: Log follow-up in system
     const followUpDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
 
-    // Step 5: Update getfrontspot with status (placeholder for now)
-    const getfrontspotUpdated = await updateGetfrontspotLead(
-      lead,
-      presentationUrl,
-      calendlyLink
-    );
+    // Step 6: Update getfrontspot with status (placeholder for now)
+    const getfrontspotUpdated = await updateGetfrontspotLead(lead, calendlyLink);
 
     const result: BookingResult = {
       email_sent: emailSent,
@@ -100,7 +101,7 @@ Keep it concise (under 150 words) and professional.`;
 
 async function sendPresentationEmail(
   lead: Lead,
-  presentationUrl: string,
+  pdfBuffer: Buffer,
   emailContent: string
 ): Promise<boolean> {
   try {
@@ -108,23 +109,30 @@ async function sendPresentationEmail(
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-    // Send via Resend
+    // Generate email template based on lead type
+    const template = generateEmailTemplate(lead, emailContent);
+
+    // Convert Buffer to base64 for Resend attachment
+    const pdfBase64 = pdfBuffer.toString("base64");
+    const fileName = `seo-audit-${lead.business_name || "presentation"}-${new Date().toISOString().split("T")[0]}.pdf`;
+
+    // Send via Resend with PDF attachment
     const result = await resend.emails.send({
       from: "noreply@my-jobs-eight.vercel.app",
       to: lead.email,
-      subject: `Your Custom SEO Audit for ${lead.business_name}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px;">
-          ${emailContent.replace(/\n/g, "<br/>")}
-          <br/><br/>
-          <a href="${presentationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
-            Download Your Presentation
-          </a>
-        </div>
-      `,
-    });
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+      attachments: [
+        {
+          filename: fileName,
+          content: pdfBase64,
+          encoding: "base64",
+        },
+      ],
+    } as any); // Type assertion due to Resend SDK version
 
-    console.log(`[booking] Email sent to ${lead.email}: ${result.data?.id}`);
+    console.log(`[booking] Email sent to ${lead.email} with PDF attachment: ${result.data?.id}`);
     return !result.error;
   } catch (error) {
     console.error(`[booking] Email send failed for ${lead.email}:`, error);
@@ -140,15 +148,14 @@ function generateCalendlyLink(lead: Lead): string {
 
 async function updateGetfrontspotLead(
   lead: Lead,
-  presentationUrl: string,
   calendlyLink: string
 ): Promise<boolean> {
   try {
     // TODO: Implement actual getfrontspot API callback
-    // POST to getfrontspot with status update
+    // POST to getfrontspot with status update including calendly link
 
     console.log(
-      `[booking] Updated getfrontspot for ${lead.email}: presentation sent`
+      `[booking] Updated getfrontspot for ${lead.email}: presentation sent with attachment`
     );
     return true;
   } catch (error) {
