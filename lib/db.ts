@@ -191,3 +191,137 @@ export async function markSlackCommandProcessed(id: number, paperclipIssueId: st
     WHERE id = ${id}
   `;
 }
+
+// ── getfrontspot Leads ──────────────────────────────────────────────────────
+
+export interface Lead {
+  id: string;
+  email: string;
+  phone: string | null;
+  business_name: string;
+  business_type: string | null;
+  getfrontspot_id: string | null;
+  raw_data: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface LeadWorkflow {
+  id: string;
+  lead_id: string;
+  status: "intake" | "analysis" | "presentation" | "booking" | "completed" | "failed";
+  intake_result: Record<string, unknown> | null;
+  analysis_result: Record<string, unknown> | null;
+  presentation_url: string | null;
+  booking_status: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  workflow_id: string;
+  agent_name: string;
+  status: "pending" | "running" | "success" | "failed";
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createLead(data: {
+  email: string;
+  phone?: string | null;
+  business_name: string;
+  business_type?: string | null;
+  getfrontspot_id?: string | null;
+  raw_data: Record<string, unknown>;
+}): Promise<Lead> {
+  const rows = await sql`
+    INSERT INTO leads (email, phone, business_name, business_type, getfrontspot_id, raw_data)
+    VALUES (${data.email}, ${data.phone || null}, ${data.business_name}, ${data.business_type || null}, ${data.getfrontspot_id || null}, ${JSON.stringify(data.raw_data)})
+    RETURNING id, email, phone, business_name, business_type, getfrontspot_id, raw_data, created_at
+  `;
+  return rows[0] as Lead;
+}
+
+export async function createLeadWorkflow(lead_id: string): Promise<LeadWorkflow> {
+  const rows = await sql`
+    INSERT INTO lead_workflows (lead_id, status)
+    VALUES (${lead_id}, 'intake')
+    RETURNING id, lead_id, status, intake_result, analysis_result, presentation_url, booking_status, error_message, created_at, updated_at
+  `;
+  return rows[0] as LeadWorkflow;
+}
+
+export async function getLeadWorkflow(workflow_id: string): Promise<LeadWorkflow | null> {
+  const rows = await sql`
+    SELECT id, lead_id, status, intake_result, analysis_result, presentation_url, booking_status, error_message, created_at, updated_at
+    FROM lead_workflows
+    WHERE id = ${workflow_id}
+  `;
+  return (rows[0] as LeadWorkflow) || null;
+}
+
+export async function updateLeadWorkflowStatus(
+  workflow_id: string,
+  status: LeadWorkflow["status"],
+  updates?: {
+    intake_result?: Record<string, unknown>;
+    analysis_result?: Record<string, unknown>;
+    presentation_url?: string;
+    booking_status?: string;
+    error_message?: string;
+  }
+): Promise<LeadWorkflow> {
+  const updateClauses: string[] = ["status = $1", "updated_at = NOW()"];
+  const params: unknown[] = [status];
+  let paramIndex = 2;
+
+  if (updates?.intake_result !== undefined) {
+    updateClauses.push(`intake_result = $${paramIndex}`);
+    params.push(JSON.stringify(updates.intake_result));
+    paramIndex++;
+  }
+  if (updates?.analysis_result !== undefined) {
+    updateClauses.push(`analysis_result = $${paramIndex}`);
+    params.push(JSON.stringify(updates.analysis_result));
+    paramIndex++;
+  }
+  if (updates?.presentation_url !== undefined) {
+    updateClauses.push(`presentation_url = $${paramIndex}`);
+    params.push(updates.presentation_url);
+    paramIndex++;
+  }
+  if (updates?.booking_status !== undefined) {
+    updateClauses.push(`booking_status = $${paramIndex}`);
+    params.push(updates.booking_status);
+    paramIndex++;
+  }
+  if (updates?.error_message !== undefined) {
+    updateClauses.push(`error_message = $${paramIndex}`);
+    params.push(updates.error_message);
+    paramIndex++;
+  }
+
+  params.push(workflow_id);
+  const query = `UPDATE lead_workflows SET ${updateClauses.join(", ")} WHERE id = $${paramIndex} RETURNING id, lead_id, status, intake_result, analysis_result, presentation_url, booking_status, error_message, created_at, updated_at`;
+
+  const rows = await sql(query, params);
+  return rows[0] as LeadWorkflow;
+}
+
+export async function logWorkflowExecution(data: {
+  workflow_id: string;
+  agent_name: string;
+  status: "pending" | "running" | "success" | "failed";
+  result?: Record<string, unknown>;
+  error?: string;
+}): Promise<WorkflowExecution> {
+  const rows = await sql`
+    INSERT INTO workflow_executions (workflow_id, agent_name, status, result, error)
+    VALUES (${data.workflow_id}, ${data.agent_name}, ${data.status}, ${data.result ? JSON.stringify(data.result) : null}, ${data.error || null})
+    RETURNING id, workflow_id, agent_name, status, result, error, created_at, updated_at
+  `;
+  return rows[0] as WorkflowExecution;
+}

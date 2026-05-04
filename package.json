@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.82.0",
     "@neondatabase/serverless": "^0.10.4",
     "next": "^16.2.2",
+    "pdfkit": "^0.18.0",
     "playwright": "^1.59.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

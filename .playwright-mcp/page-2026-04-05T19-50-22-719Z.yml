@@ -1,0 +1,35 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]:
+            - heading "My Jobs" [level=1] [ref=e7]
+            - paragraph [ref=e8]: Remote design jobs — Product Designer, UX Designer, Figma Designer
+          - generic [ref=e9]:
+            - link "Resume" [ref=e10] [cursor=pointer]:
+              - /url: /api/resume
+              - img [ref=e11]
+              - text: Resume
+            - button "Refresh Now" [ref=e13] [cursor=pointer]
+        - navigation [ref=e14]:
+          - button "New Jobs" [ref=e15] [cursor=pointer]
+          - button "Applied Jobs" [ref=e16] [cursor=pointer]:
+            - img [ref=e17]
+            - text: Applied Jobs
+    - main [ref=e19]:
+      - textbox "Filter by title or company…" [ref=e21]
+      - generic [ref=e22]:
+        - button "All Sources" [ref=e23] [cursor=pointer]
+        - button "We Work Remotely" [ref=e24] [cursor=pointer]
+        - button "Remote OK" [ref=e25] [cursor=pointer]
+        - button "Remotive" [ref=e26] [cursor=pointer]
+        - button "UIUXJobsBoard" [ref=e27] [cursor=pointer]
+        - button "RemoteJobs.io" [ref=e28] [cursor=pointer]
+        - button "LinkedIn" [ref=e29] [cursor=pointer]
+        - button "Indeed" [ref=e30] [cursor=pointer]
+        - button "Dice" [ref=e31] [cursor=pointer]
+        - button "Monster" [ref=e32] [cursor=pointer]
+        - button "FlexJobs" [ref=e33] [cursor=pointer]
+      - paragraph [ref=e34]: Loading…
+  - alert [ref=e35]
